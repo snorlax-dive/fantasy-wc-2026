@@ -6,13 +6,13 @@ import { saveBracket } from './actions'
 export type TeamRow = { id: number; name: string; flag: string | null }
 export type PlayerOption = { id: number; name: string; team: string }
 
-const LEVELS = [
-  { v: 0, label: 'Out in groups' },
-  { v: 1, label: 'Round of 16' },
-  { v: 2, label: 'Quarter-final' },
-  { v: 3, label: 'Semi-final' },
-  { v: 4, label: 'Final' },
-  { v: 5, label: 'Champion 🏆' },
+// Sections shown top-down; a team sits at the FURTHEST round you think it reaches.
+const SECTIONS = [
+  { level: 5, label: 'Champion', emoji: '🏆', accent: 'bg-amber-100 text-amber-900 ring-amber-300' },
+  { level: 4, label: 'Final (runner-up)', emoji: '🥈', accent: 'bg-slate-100 text-slate-800 ring-slate-300' },
+  { level: 3, label: 'Semi-finals', emoji: '', accent: 'bg-red-50 text-cro-red ring-red-200' },
+  { level: 2, label: 'Quarter-finals', emoji: '', accent: 'bg-blue-50 text-cro-blue ring-blue-200' },
+  { level: 1, label: 'Round of 16', emoji: '', accent: 'bg-slate-50 text-slate-700 ring-slate-200' },
 ]
 
 export function BracketBoard({
@@ -30,33 +30,28 @@ export function BracketBoard({
 }) {
   const [furthest, setFurthest] = useState<Record<number, number>>(initialFurthest)
   const [goldenBoot, setGoldenBoot] = useState<number | null>(initialGoldenBoot)
-  const [q, setQ] = useState('')
+  const [openPicker, setOpenPicker] = useState<number | null>(null)
+  const [pickQ, setPickQ] = useState('')
   const [gbQuery, setGbQuery] = useState('')
   const [pending, start] = useTransition()
   const [msg, setMsg] = useState<{ ok?: boolean; error?: string } | null>(null)
+
+  const teamById = useMemo(() => new Map(teams.map((t) => [t.id, t])), [teams])
 
   const counts = useMemo(() => {
     const vals = Object.values(furthest)
     const atLeast = (n: number) => vals.filter((l) => l >= n).length
     return { r16: atLeast(1), qf: atLeast(2), sf: atLeast(3), final: atLeast(4), champ: atLeast(5) }
   }, [furthest])
-
   const overLimit =
     counts.r16 > 16 || counts.qf > 8 || counts.sf > 4 || counts.final > 2 || counts.champ > 1
 
-  const gbName = goldenBoot ? players.find((p) => p.id === goldenBoot) : null
-
-  const filteredTeams = useMemo(
-    () => teams.filter((t) => q === '' || t.name.toLowerCase().includes(q.toLowerCase())),
-    [teams, q]
-  )
-  const gbResults = useMemo(() => {
-    if (gbQuery.length < 2) return []
-    const s = gbQuery.toLowerCase()
-    return players
-      .filter((p) => p.name.toLowerCase().includes(s) || p.team.toLowerCase().includes(s))
-      .slice(0, 8)
-  }, [players, gbQuery])
+  const teamsAt = (level: number) =>
+    Object.entries(furthest)
+      .filter(([, l]) => l === level)
+      .map(([id]) => teamById.get(Number(id)))
+      .filter((t): t is TeamRow => !!t)
+      .sort((a, b) => a.name.localeCompare(b.name))
 
   function setLevel(teamId: number, level: number) {
     if (locked) return
@@ -75,30 +70,39 @@ export function BracketBoard({
     })
   }
 
+  const pickResults = useMemo(() => {
+    const s = pickQ.toLowerCase()
+    return teams.filter((t) => s === '' || t.name.toLowerCase().includes(s)).slice(0, 10)
+  }, [teams, pickQ])
+
+  const gbName = goldenBoot ? players.find((p) => p.id === goldenBoot) : null
+  const gbResults = useMemo(() => {
+    if (gbQuery.length < 2) return []
+    const s = gbQuery.toLowerCase()
+    return players.filter((p) => p.name.toLowerCase().includes(s) || p.team.toLowerCase().includes(s)).slice(0, 8)
+  }, [players, gbQuery])
+
   function onSave() {
     start(async () => {
-      const res = await saveBracket({
-        furthest: Object.fromEntries(Object.entries(furthest)),
-        goldenBoot,
-      })
-      setMsg(res)
+      setMsg(await saveBracket({ furthest: Object.fromEntries(Object.entries(furthest)), goldenBoot }))
     })
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-5 pb-24 sm:pb-10">
+    <main className="mx-auto w-full max-w-2xl px-4 py-5 pb-24 sm:pb-10">
       <h1 className="text-xl font-extrabold text-cro-navy">Bracket &amp; awards</h1>
-      <p className="mt-1 text-sm text-slate-500">
-        For each team, pick how far they go. R16 +1 · QF +2 · SF +4 · Final +8 · Champion +15 · Golden
-        Boot +10. Locks at the first kickoff.
+      <p className="mt-1 text-xs text-slate-500">
+        Place each country at the furthest round you think they reach. R16 +1 · QF +2 · SF +4 · Final +8 ·
+        Champion +15 · Golden Boot +10.
       </p>
 
       {locked && (
-        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
           The bracket is locked — read-only.
         </div>
       )}
 
+      {/* cumulative limit counters */}
       <div className="mt-4 grid grid-cols-5 gap-2 text-center text-xs">
         <Counter label="R16" value={counts.r16} max={16} />
         <Counter label="QF" value={counts.qf} max={8} />
@@ -107,9 +111,84 @@ export function BracketBoard({
         <Counter label="Champ" value={counts.champ} max={1} />
       </div>
 
+      {/* visual round sections */}
+      <div className="mt-4 space-y-3">
+        {SECTIONS.map((sec) => {
+          const here = teamsAt(sec.level)
+          const isOpen = openPicker === sec.level
+          return (
+            <div key={sec.level} className="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+              <div className="flex items-center justify-between px-4 pt-3">
+                <h2 className="text-sm font-bold text-cro-navy">
+                  {sec.emoji} {sec.label}
+                </h2>
+                {!locked && (
+                  <button
+                    onClick={() => {
+                      setOpenPicker(isOpen ? null : sec.level)
+                      setPickQ('')
+                    }}
+                    className="rounded-full bg-cro-red px-2.5 py-1 text-xs font-bold text-white hover:bg-cro-red-dark"
+                  >
+                    {isOpen ? 'Close' : '+ Add'}
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-1.5 px-4 pb-3 pt-2">
+                {here.map((t) => (
+                  <span
+                    key={t.id}
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${sec.accent}`}
+                  >
+                    {t.name}
+                    {!locked && (
+                      <button onClick={() => setLevel(t.id, 0)} className="ml-0.5 text-current/60 hover:text-red-600">
+                        ✕
+                      </button>
+                    )}
+                  </span>
+                ))}
+                {here.length === 0 && <span className="text-xs text-slate-300">— no teams —</span>}
+              </div>
+
+              {isOpen && !locked && (
+                <div className="border-t border-slate-100 p-3">
+                  <input
+                    value={pickQ}
+                    onChange={(e) => setPickQ(e.target.value)}
+                    autoFocus
+                    placeholder="Search a country…"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-cro-red"
+                  />
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {pickResults.map((t) => {
+                      const cur = furthest[t.id]
+                      return (
+                        <button
+                          key={t.id}
+                          onClick={() => {
+                            setLevel(t.id, sec.level)
+                            setOpenPicker(null)
+                          }}
+                          className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-cro-red hover:text-white"
+                        >
+                          {t.name}
+                          {cur ? <span className="ml-1 text-[10px] text-slate-400">·moved</span> : null}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
       {/* Golden boot */}
-      <div className="mt-5 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
-        <h2 className="text-sm font-bold text-cro-navy">Golden Boot (top scorer) — +10</h2>
+      <div className="mt-3 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+        <h2 className="text-sm font-bold text-cro-navy">⚽ Golden Boot — +10</h2>
         {gbName ? (
           <div className="mt-2 flex items-center gap-2 text-sm">
             <span className="rounded bg-amber-50 px-2 py-1 font-semibold text-amber-800 ring-1 ring-amber-200">
@@ -153,35 +232,6 @@ export function BracketBoard({
         )}
       </div>
 
-      {/* Teams */}
-      <div className="mt-5">
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Filter teams…"
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-cro-red"
-        />
-        <ul className="mt-2 divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-          {filteredTeams.map((t) => (
-            <li key={t.id} className="flex items-center gap-3 px-3 py-2">
-              <span className="min-w-0 flex-1 truncate text-sm font-medium text-cro-navy">{t.name}</span>
-              <select
-                value={furthest[t.id] ?? 0}
-                disabled={locked}
-                onChange={(e) => setLevel(t.id, Number(e.target.value))}
-                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-cro-red disabled:bg-slate-50"
-              >
-                {LEVELS.map((l) => (
-                  <option key={l.v} value={l.v}>
-                    {l.label}
-                  </option>
-                ))}
-              </select>
-            </li>
-          ))}
-        </ul>
-      </div>
-
       {msg?.error && <p className="mt-3 text-sm text-red-600">{msg.error}</p>}
       {msg?.ok && <p className="mt-3 text-sm text-emerald-600">Bracket saved! ✅</p>}
       {overLimit && <p className="mt-3 text-sm text-red-600">You&apos;re over a round limit — trim your picks.</p>}
@@ -202,11 +252,7 @@ export function BracketBoard({
 function Counter({ label, value, max }: { label: string; value: number; max: number }) {
   const over = value > max
   return (
-    <div
-      className={`rounded-lg p-2 shadow-sm ring-1 ${
-        over ? 'bg-red-50 ring-red-200' : 'bg-white ring-slate-200'
-      }`}
-    >
+    <div className={`rounded-lg p-2 shadow-sm ring-1 ${over ? 'bg-red-50 ring-red-200' : 'bg-white ring-slate-200'}`}>
       <div className="text-slate-400">{label}</div>
       <div className={`font-extrabold tabular-nums ${over ? 'text-red-600' : 'text-cro-navy'}`}>
         {value}/{max}
