@@ -43,3 +43,16 @@ body {
     var(--color-pitch-dark) 36px 72px
   );
 }
+
+/* Top navigation progress bar (indeterminate sweep) */
+@keyframes nprogress {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+.nprogress-bar {
+  animation: nprogress 0.9s ease-in-out infinite;
+}
