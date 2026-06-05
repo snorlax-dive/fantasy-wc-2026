@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { SquadBuilder, type Player, type Formation } from './squad-builder'
+import { SquadBuilder, type Player } from './squad-builder'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,10 +23,8 @@ export default async function SquadPage() {
   const { data: settingsRows } = await supabase.from('settings').select('key, value')
   const settings = Object.fromEntries((settingsRows ?? []).map((r) => [r.key, r.value]))
   const budgetCap = Number(settings['budget_cap'] ?? 100)
-  const formation = (settings['formation'] ?? { GK: 1, DEF: 4, MID: 3, FWD: 3 }) as Formation
   const stage = (settings['current_stage'] as string) ?? 'GROUP'
 
-  // Fixtures for this round → lock time + which teams are still involved.
   const { data: stageFx } = await supabase
     .from('fixtures')
     .select('kickoff, team_a, team_b')
@@ -42,13 +40,19 @@ export default async function SquadPage() {
   const locked =
     settings['tournament_locked'] === true || (firstKickoff ? new Date(firstKickoff) <= new Date() : false)
 
-  // Player pool: restrict to teams still in this round when we know them; else all.
   let playersQuery = supabase
     .from('players')
     .select('id, name, position, price, team:teams(name, flag_url)')
     .eq('active', true)
   if (aliveTeamIds.size > 0) playersQuery = playersQuery.in('team_id', [...aliveTeamIds])
   const { data: rawPlayers } = await playersQuery.order('price', { ascending: false })
+
+  // Accumulated fantasy points per player (their contribution to date).
+  const { data: statRows } = await supabase.from('player_match_stats').select('player_id, fantasy_points')
+  const ptsById = new Map<number, number>()
+  for (const s of statRows ?? []) {
+    ptsById.set(s.player_id as number, (ptsById.get(s.player_id as number) ?? 0) + (s.fantasy_points ?? 0))
+  }
 
   const players: Player[] = (rawPlayers ?? []).map((p) => {
     const team = Array.isArray(p.team) ? p.team[0] : p.team
@@ -59,6 +63,7 @@ export default async function SquadPage() {
       price: Number(p.price),
       team: team?.name ?? '',
       flag: team?.flag_url ?? null,
+      points: ptsById.get(p.id as number) ?? 0,
     }
   })
 
@@ -82,7 +87,6 @@ export default async function SquadPage() {
     <SquadBuilder
       players={players}
       budgetCap={budgetCap}
-      formation={formation}
       initialPicks={initialPicks}
       locked={locked}
       stageLabel={STAGE_LABEL[stage] ?? stage}

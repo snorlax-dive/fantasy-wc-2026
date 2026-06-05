@@ -19,7 +19,6 @@ export async function saveSquad(input: {
   const { data: settingsRows } = await supabase.from('settings').select('key, value')
   const settings = Object.fromEntries((settingsRows ?? []).map((r) => [r.key, r.value]))
   const budgetCap = Number(settings['budget_cap'] ?? 100)
-  const formation = (settings['formation'] ?? { GK: 1, DEF: 4, MID: 3, FWD: 3 }) as Record<Pos, number>
   const stage = (settings['current_stage'] as string) ?? 'GROUP'
 
   // Lock check: no edits once this round's first match has kicked off.
@@ -54,13 +53,11 @@ export async function saveSquad(input: {
     counts[p.position as Pos]++
     spend += Number(p.price)
   }
-  for (const pos of ['GK', 'DEF', 'MID', 'FWD'] as Pos[]) {
-    if (counts[pos] !== formation[pos]) {
-      return {
-        error: `Formation must be ${formation.GK}-${formation.DEF}-${formation.MID}-${formation.FWD} (GK-DEF-MID-FWD). You have ${counts.GK}-${counts.DEF}-${counts.MID}-${counts.FWD}.`,
-      }
-    }
-  }
+  // Any legal formation (GK always 1; 3–5 DEF, 2–5 MID, 1–3 FWD; 11 total).
+  if (counts.GK !== 1) return { error: 'Pick exactly 1 goalkeeper.' }
+  if (counts.DEF < 3 || counts.DEF > 5) return { error: 'Pick 3–5 defenders.' }
+  if (counts.MID < 2 || counts.MID > 5) return { error: 'Pick 2–5 midfielders.' }
+  if (counts.FWD < 1 || counts.FWD > 3) return { error: 'Pick 1–3 forwards.' }
   if (spend > budgetCap + 1e-9) {
     return { error: `Over budget: €${spend.toFixed(1)}m / €${budgetCap}m.` }
   }

@@ -47,10 +47,15 @@ function mapStage(round: string): 'GROUP' | 'R32' | 'R16' | 'QF' | 'SF' | 'FINAL
   return 'FINAL' // final + third-place
 }
 
-const PRICE_BASE: Record<Pos, number> = { GK: 5, DEF: 5, MID: 5.5, FWD: 6 }
+// FPL-inspired pricing: ~€4.0 floor, premiums on strong attacking players up to ~€13.5,
+// so a €100 budget forces real trade-offs. Deterministic (stable across re-seeds).
+const PRICE_BASE: Record<Pos, number> = { GK: 4.5, DEF: 4.5, MID: 5.0, FWD: 5.5 }
+const PRICE_STR: Record<Pos, number> = { GK: 1.5, DEF: 2.5, MID: 5.5, FWD: 7.5 }
+const PRICE_JIT: Record<Pos, number> = { GK: 0.5, DEF: 1.0, MID: 2.5, FWD: 3.0 }
 function priceFor(pos: Pos, strength: number, apiPlayerId: number): number {
-  const jitter = (apiPlayerId % 7) / 7 // deterministic 0..~0.86 so re-seeds are stable
-  return Math.round((PRICE_BASE[pos] + strength * 4 + jitter) * 2) / 2 // nearest 0.5
+  const h = (((apiPlayerId * 2654435761) >>> 0) % 1000) / 1000 // deterministic hash 0..1
+  const raw = PRICE_BASE[pos] + strength * PRICE_STR[pos] + h * PRICE_JIT[pos]
+  return Math.min(13.5, Math.max(4.0, Math.round(raw * 2) / 2)) // clamp + nearest 0.5
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
