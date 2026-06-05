@@ -1,17 +1,35 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
 
+const STAGE_LABEL: Record<string, string> = {
+  GROUP: 'Group stage',
+  R32: 'Round of 32',
+  R16: 'Round of 16',
+  QF: 'Quarter-finals',
+  SF: 'Semi-finals',
+  FINAL: 'Final',
+}
 const TILES = [
-  { href: '/squad', title: 'Squad', desc: 'Build your XI', emoji: '⚽' },
-  { href: '/predictions', title: 'Predictions', desc: 'Scores · scorers · cards', emoji: '🎯' },
-  { href: '/bracket', title: 'Bracket', desc: 'Knockout tree + awards', emoji: '🗺️' },
-  { href: '/leaderboard', title: 'Leaderboard', desc: 'Who’s on top', emoji: '🏆' },
-  { href: '/blocks', title: 'Blocks & shields', desc: 'Sabotage your rivals', emoji: '🛡️' },
-  { href: '/profile', title: 'Your club', desc: 'Name & crest', emoji: '🎽' },
+  { href: '/squad', title: 'Squad', emoji: '⚽' },
+  { href: '/predictions', title: 'Predict', emoji: '🎯' },
+  { href: '/bracket', title: 'Bracket', emoji: '🗺️' },
+  { href: '/leaderboard', title: 'Table', emoji: '🏆' },
+  { href: '/blocks', title: 'Blocks', emoji: '🛡️' },
+  { href: '/profile', title: 'Your club', emoji: '🎽' },
 ]
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function who(p: any) {
+  return {
+    name: p?.team_name || p?.display_name || 'Manager',
+    crest: p?.crest || '⚽',
+    color: p?.color || '#94a3b8',
+  }
+}
 
 export default async function Home() {
   const supabase = await createClient()
@@ -22,25 +40,54 @@ export default async function Home() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('display_name, is_commissioner')
+    .select('display_name, team_name, is_commissioner')
     .eq('id', user.id)
     .maybeSingle()
-  const name = profile?.display_name ?? user.email
+  const name = profile?.team_name || profile?.display_name || user.email
+
+  const admin = createAdminClient()
+  const [{ data: lb }, { data: profs }, { data: squads }, { data: blocks }, { data: topStats }] =
+    await Promise.all([
+      supabase.rpc('get_leaderboard'),
+      admin.from('profiles').select('id, display_name, team_name, crest, color'),
+      admin.from('squads').select('user_id, stage, fantasy_points').gt('fantasy_points', 0),
+      admin.from('blocks').select('blocker, target, player_id, stage').eq('revealed', true).limit(8),
+      admin.from('player_match_stats').select('player_id, fantasy_points').order('fantasy_points', { ascending: false }).limit(6),
+    ])
+
+  const pById = new Map((profs ?? []).map((p: any) => [p.id, p]))
+  const standings = (lb ?? []).slice(0, 3) as any[]
+
+  // Manager of the Round = top fantasy_points per stage
+  const motrByStage = new Map<string, { user_id: string; pts: number }>()
+  for (const s of squads ?? []) {
+    const cur = motrByStage.get(s.stage)
+    if (!cur || s.fantasy_points > cur.pts) motrByStage.set(s.stage, { user_id: s.user_id, pts: s.fantasy_points })
+  }
+  const motr = [...motrByStage.entries()]
+
+  // Resolve names for blocks + hauls
+  const haulIds = (topStats ?? []).map((s: any) => s.player_id)
+  const blockPlayerIds = (blocks ?? []).map((b: any) => b.player_id)
+  const allPlayerIds = [...new Set([...haulIds, ...blockPlayerIds])]
+  const playerNames = new Map<number, string>()
+  if (allPlayerIds.length) {
+    const { data: pl } = await admin.from('players').select('id, name').in('id', allPlayerIds)
+    for (const p of pl ?? []) playerNames.set(p.id as number, p.name as string)
+  }
+  const hauls = (topStats ?? []).filter((s: any) => s.fantasy_points > 0).slice(0, 5)
+
+  const hasBuzz = standings.some((s) => s.total_points > 0) || motr.length || (blocks ?? []).length || hauls.length
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-5 pb-24 sm:pb-10">
+    <main className="mx-auto w-full max-w-2xl px-4 py-5 pb-24 sm:pb-10">
+      {/* Hero */}
       <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
         <div className="p-5">
           <p className="text-xs font-bold uppercase tracking-widest text-cro-red">Fantasy World Cup 2026</p>
           <h1 className="mt-1 text-2xl font-extrabold text-cro-navy">Welcome, {name} ⚽</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Lock your squad, predictions, and bracket before the first kickoff.
-          </p>
           {profile?.is_commissioner && (
-            <Link
-              href="/admin"
-              className="mt-3 inline-block rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800 ring-1 ring-amber-200"
-            >
+            <Link href="/admin" className="mt-3 inline-block rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800 ring-1 ring-amber-200">
               Commissioner panel →
             </Link>
           )}
@@ -48,19 +95,105 @@ export default async function Home() {
         <div className="checker h-1.5 w-full" />
       </section>
 
-      <div className="mt-4 grid grid-cols-2 gap-3">
+      {/* Quick links */}
+      <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
         {TILES.map((t) => (
-          <Link
-            key={t.href}
-            href={t.href}
-            className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:ring-cro-red"
-          >
-            <div className="text-2xl">{t.emoji}</div>
-            <div className="mt-2 font-extrabold text-cro-navy">{t.title}</div>
-            <div className="text-xs text-slate-500">{t.desc}</div>
+          <Link key={t.href} href={t.href} className="flex flex-col items-center gap-1 rounded-xl bg-white p-3 text-center shadow-sm ring-1 ring-slate-200 transition hover:ring-cro-red">
+            <span className="text-xl">{t.emoji}</span>
+            <span className="text-[11px] font-bold text-cro-navy">{t.title}</span>
           </Link>
         ))}
       </div>
+
+      {!hasBuzz ? (
+        <div className="mt-4 rounded-2xl bg-white p-6 text-center text-sm text-slate-500 shadow-sm ring-1 ring-slate-200">
+          The tournament hasn&apos;t kicked off yet. Lock your <Link href="/squad" className="font-semibold text-cro-red">squad</Link>,{' '}
+          <Link href="/predictions" className="font-semibold text-cro-red">predictions</Link> and{' '}
+          <Link href="/bracket" className="font-semibold text-cro-red">bracket</Link> — the buzz starts once the games begin.
+        </div>
+      ) : (
+        <div className="mt-4 space-y-4">
+          {/* Standings */}
+          {standings.some((s) => s.total_points > 0) && (
+            <Card title="🏆 Top of the table">
+              {standings.map((s, i) => {
+                const w = who(pById.get(s.user_id))
+                return (
+                  <Row key={s.user_id}>
+                    <span className="w-5 text-center">{['🥇', '🥈', '🥉'][i]}</span>
+                    <Crest w={w} />
+                    <span className="flex-1 truncate font-semibold text-cro-navy">{w.name}</span>
+                    <span className="font-extrabold tabular-nums text-cro-navy">{s.total_points}</span>
+                  </Row>
+                )
+              })}
+            </Card>
+          )}
+
+          {/* Manager of the round */}
+          {motr.length > 0 && (
+            <Card title="⭐ Manager of the round">
+              {motr.map(([stage, m]) => {
+                const w = who(pById.get(m.user_id))
+                return (
+                  <Row key={stage}>
+                    <span className="w-20 shrink-0 text-xs font-semibold text-slate-400">{STAGE_LABEL[stage] ?? stage}</span>
+                    <Crest w={w} />
+                    <span className="flex-1 truncate font-semibold text-cro-navy">{w.name}</span>
+                    <span className="font-extrabold tabular-nums text-cro-navy">{m.pts}</span>
+                  </Row>
+                )
+              })}
+            </Card>
+          )}
+
+          {/* Top hauls */}
+          {hauls.length > 0 && (
+            <Card title="🔥 Biggest hauls">
+              {hauls.map((s: any, i: number) => (
+                <Row key={i}>
+                  <span className="flex-1 truncate text-cro-navy">{playerNames.get(s.player_id) ?? 'Player'}</span>
+                  <span className="font-extrabold tabular-nums text-cro-blue">{s.fantasy_points} pts</span>
+                </Row>
+              ))}
+            </Card>
+          )}
+
+          {/* Blocks */}
+          {(blocks ?? []).length > 0 && (
+            <Card title="🛡️ Blocks landed">
+              {(blocks ?? []).map((b: any, i: number) => (
+                <Row key={i}>
+                  <span className="truncate text-sm text-slate-600">
+                    <span className="font-semibold text-cro-navy">{who(pById.get(b.blocker)).name}</span> blocked{' '}
+                    <span className="text-cro-red">{playerNames.get(b.player_id) ?? 'a player'}</span> on{' '}
+                    <span className="font-semibold text-cro-navy">{who(pById.get(b.target)).name}</span>
+                  </span>
+                </Row>
+              ))}
+            </Card>
+          )}
+        </div>
+      )}
     </main>
+  )
+}
+
+function Card({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+      <h2 className="border-b border-slate-100 px-4 py-2 text-sm font-bold text-cro-navy">{title}</h2>
+      <div className="divide-y divide-slate-100">{children}</div>
+    </section>
+  )
+}
+function Row({ children }: { children: React.ReactNode }) {
+  return <div className="flex items-center gap-2 px-4 py-2 text-sm">{children}</div>
+}
+function Crest({ w }: { w: { crest: string; color: string } }) {
+  return (
+    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-xs text-white" style={{ backgroundColor: w.color }}>
+      {w.crest}
+    </span>
   )
 }

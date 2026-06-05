@@ -22,6 +22,8 @@ export type ExistingPrediction = {
   is_banker: boolean
 }
 
+export type RevealPick = { name: string; crest: string; color: string; a: number | null; b: number | null; banker: boolean }
+
 type CardState = { a: string; b: string; s1: string; s2: string; red: boolean }
 type Status = { saving?: boolean; saved?: boolean; error?: string }
 
@@ -29,10 +31,12 @@ export function PredictionsBoard({
   fixtures,
   playersByTeam,
   existing,
+  reveal,
 }: {
   fixtures: FixtureRow[]
   playersByTeam: Record<number, PlayerLite[]>
   existing: ExistingPrediction[]
+  reveal: Record<number, RevealPick[]>
 }) {
   const existingByFixture = useMemo(() => new Map(existing.map((e) => [e.fixture_id, e])), [existing])
 
@@ -160,6 +164,7 @@ export function PredictionsBoard({
                       onToggle={() => toggleExpand(f.id)}
                       onBanker={(c) => setBankerId(c ? f.id : bankerId === f.id ? null : bankerId)}
                       onSave={() => save(f)}
+                      reveal={reveal[f.id] ?? []}
                     />
                   ))}
                 </ul>
@@ -185,6 +190,7 @@ function MatchRow({
   onToggle,
   onBanker,
   onSave,
+  reveal,
 }: {
   f: FixtureRow
   state: CardState
@@ -198,6 +204,7 @@ function MatchRow({
   onToggle: () => void
   onBanker: (checked: boolean) => void
   onSave: () => void
+  reveal: RevealPick[]
 }) {
   const locked = new Date(f.lockTime) <= new Date()
   const kickoff = new Date(f.kickoff).toLocaleString(undefined, {
@@ -229,8 +236,8 @@ function MatchRow({
           className="w-8 rounded-md border border-slate-300 bg-white py-1 text-center text-sm font-bold text-cro-navy outline-none focus:border-cro-red disabled:bg-slate-50"
         />
         <span className="flex-1 truncate text-sm font-semibold text-cro-navy">{f.away.name}</span>
-        <button onClick={onToggle} className="shrink-0 text-xs text-slate-400 hover:text-cro-red" title="More options">
-          {expanded ? '▾' : '⋯'}
+        <button onClick={onToggle} className="shrink-0 text-xs text-slate-400 hover:text-cro-red" title={locked ? "See everyone's picks" : 'More options'}>
+          {expanded ? '▾' : locked ? '👀' : '⋯'}
         </button>
       </div>
 
@@ -252,6 +259,30 @@ function MatchRow({
           )}
         </span>
       </div>
+
+      {expanded && locked && (
+        <div className="mt-2 rounded-lg bg-slate-50 p-2">
+          <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400">Everyone&apos;s picks</div>
+          {reveal.length === 0 ? (
+            <div className="text-xs text-slate-400">No predictions were made.</div>
+          ) : (
+            <ul className="grid grid-cols-1 gap-1 text-xs sm:grid-cols-2">
+              {reveal.map((r, i) => (
+                <li key={i} className="flex items-center gap-1.5">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[10px] text-white" style={{ backgroundColor: r.color }}>
+                    {r.crest}
+                  </span>
+                  <span className="truncate text-slate-600">{r.name}</span>
+                  <span className="ml-auto font-bold tabular-nums text-cro-navy">
+                    {r.a ?? '–'}-{r.b ?? '–'}
+                    {r.banker && <span className="ml-0.5 text-amber-600">★</span>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {expanded && !locked && (
         <div className="mt-2 space-y-2 rounded-lg bg-slate-50 p-2">

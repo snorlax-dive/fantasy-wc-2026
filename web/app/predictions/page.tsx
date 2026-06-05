@@ -1,7 +1,14 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchAll } from '@/lib/supabase/fetchAll'
-import { PredictionsBoard, type FixtureRow, type PlayerLite, type ExistingPrediction } from './predictions-board'
+import {
+  PredictionsBoard,
+  type FixtureRow,
+  type PlayerLite,
+  type ExistingPrediction,
+  type RevealPick,
+} from './predictions-board'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,5 +53,29 @@ export default async function PredictionsPage() {
 
   const existing = (preds ?? []) as ExistingPrediction[]
 
-  return <PredictionsBoard fixtures={fixtures} playersByTeam={playersByTeam} existing={existing} />
+  // Reveal: once a match locks, show everyone's picks (cross-user → admin read).
+  const now = Date.now()
+  const lockedIds = fixtures.filter((f) => new Date(f.lockTime).getTime() <= now).map((f) => f.id)
+  const reveal: Record<number, RevealPick[]> = {}
+  if (lockedIds.length > 0) {
+    const admin = createAdminClient()
+    const allPreds = await fetchAll((from, to) =>
+      admin.from('predictions').select('fixture_id, user_id, pred_a, pred_b, is_banker').in('fixture_id', lockedIds).range(from, to)
+    )
+    const { data: profs } = await admin.from('profiles').select('id, display_name, team_name, crest, color')
+    const profById = new Map((profs ?? []).map((p) => [p.id as string, p]))
+    for (const pr of allPreds) {
+      const pf = profById.get(pr.user_id as string)
+      ;(reveal[pr.fixture_id as number] ??= []).push({
+        name: (pf?.team_name as string) || (pf?.display_name as string) || 'Manager',
+        crest: (pf?.crest as string) || '⚽',
+        color: (pf?.color as string) || '#94a3b8',
+        a: pr.pred_a,
+        b: pr.pred_b,
+        banker: pr.is_banker,
+      })
+    }
+  }
+
+  return <PredictionsBoard fixtures={fixtures} playersByTeam={playersByTeam} existing={existing} reveal={reveal} />
 }
