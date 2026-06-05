@@ -68,6 +68,7 @@ export function SquadBuilder({
   const formation = parse(formationStr)
   const [tripleCaptain, setTripleCaptain] = useState<boolean>(tripleCaptainStage === currentStage)
   const [tab, setTab] = useState<Pos | 'ALL'>('ALL')
+  const [nation, setNation] = useState('')
   const [q, setQ] = useState('')
   const [pending, start] = useTransition()
   const [msg, setMsg] = useState<{ ok?: boolean; error?: string } | null>(null)
@@ -84,8 +85,16 @@ export function SquadBuilder({
 
   const spend = selectedPlayers.reduce((s, p) => s + p.price, 0)
   const remaining = budgetCap - spend
-  const formationOk = POSES.every((pos) => counts[pos] === formation[pos])
-  const canSave = !locked && selected.length === 11 && formationOk && remaining >= -1e-9 && captain != null
+  // Any legal formation can be saved (matches the server) — the formation chip is just a guide.
+  const legal =
+    counts.GK === 1 &&
+    counts.DEF >= 3 &&
+    counts.DEF <= 5 &&
+    counts.MID >= 2 &&
+    counts.MID <= 5 &&
+    counts.FWD >= 1 &&
+    counts.FWD <= 3
+  const canSave = !locked && selected.length === 11 && legal && remaining >= -1e-9 && captain != null
 
   function toggle(p: Player) {
     if (locked) return
@@ -100,17 +109,21 @@ export function SquadBuilder({
     setSelected([...selected, p.id])
   }
 
+  const nations = useMemo(
+    () => [...new Set(players.map((p) => p.team))].filter(Boolean).sort(),
+    [players]
+  )
   const filtered = useMemo(
     () =>
-      players
-        .filter(
-          (p) =>
-            (tab === 'ALL' || p.position === tab) &&
-            (q === '' ||
-              p.name.toLowerCase().includes(q.toLowerCase()) ||
-              p.team.toLowerCase().includes(q.toLowerCase()))
-        ),
-    [players, tab, q]
+      players.filter(
+        (p) =>
+          (tab === 'ALL' || p.position === tab) &&
+          (nation === '' || p.team === nation) &&
+          (q === '' ||
+            p.name.toLowerCase().includes(q.toLowerCase()) ||
+            p.team.toLowerCase().includes(q.toLowerCase()))
+      ),
+    [players, tab, q, nation]
   )
 
   function onSave() {
@@ -136,7 +149,7 @@ export function SquadBuilder({
       {/* Stats */}
       <div className="mt-4 grid grid-cols-4 gap-2">
         <Stat label="Players" value={`${selected.length}/11`} ok={selected.length === 11} />
-        <Stat label="Shape" value={`${counts.DEF}-${counts.MID}-${counts.FWD}`} ok={formationOk} />
+        <Stat label="Shape" value={`${counts.DEF}-${counts.MID}-${counts.FWD}`} ok={legal} />
         <Stat label="Spent" value={`€${spend.toFixed(1)}`} ok={remaining >= -1e-9} />
         <Stat label="Left" value={`€${remaining.toFixed(1)}`} ok={remaining >= -1e-9} />
       </div>
@@ -221,6 +234,19 @@ export function SquadBuilder({
           {pending ? 'Saving…' : 'Save squad'}
         </button>
       )}
+      {!locked && !canSave && (
+        <p className="mt-2 text-center text-xs text-slate-500">
+          {selected.length !== 11
+            ? `Pick ${11 - selected.length} more — you need 11 players.`
+            : !legal
+              ? 'Formation must be 1 GK · 3–5 DEF · 2–5 MID · 1–3 FWD.'
+              : remaining < -1e-9
+                ? `You're €${(-remaining).toFixed(1)}m over budget.`
+                : captain == null
+                  ? 'Tap a player on the pitch to set your captain (C).'
+                  : ''}
+        </p>
+      )}
 
       {/* Player pool */}
       {!locked && (
@@ -237,12 +263,24 @@ export function SquadBuilder({
                 {t === 'ALL' ? 'All' : t}
               </button>
             ))}
+            <select
+              value={nation}
+              onChange={(e) => setNation(e.target.value)}
+              className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 outline-none focus:border-cro-red"
+            >
+              <option value="">All nations</option>
+              {nations.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
             <span className="ml-auto text-xs font-medium text-slate-400">{filtered.length} players</span>
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search…"
-              className="w-36 rounded-lg border border-slate-300 bg-white px-3 py-1 text-sm outline-none focus:border-cro-red"
+              className="w-32 rounded-lg border border-slate-300 bg-white px-3 py-1 text-sm outline-none focus:border-cro-red"
             />
           </div>
 
