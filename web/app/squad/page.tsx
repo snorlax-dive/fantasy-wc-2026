@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { fetchAll } from '@/lib/supabase/fetchAll'
 import { SquadBuilder, type Player } from './squad-builder'
 
 export const dynamic = 'force-dynamic'
@@ -40,21 +41,25 @@ export default async function SquadPage() {
   const locked =
     settings['tournament_locked'] === true || (firstKickoff ? new Date(firstKickoff) <= new Date() : false)
 
-  let playersQuery = supabase
-    .from('players')
-    .select('id, name, position, price, team:teams(name, flag_url)')
-    .eq('active', true)
-  if (aliveTeamIds.size > 0) playersQuery = playersQuery.in('team_id', [...aliveTeamIds])
-  const { data: rawPlayers } = await playersQuery.order('price', { ascending: false })
+  const rawPlayers = await fetchAll((from, to) => {
+    let qy = supabase
+      .from('players')
+      .select('id, name, position, price, team:teams(name, flag_url)')
+      .eq('active', true)
+    if (aliveTeamIds.size > 0) qy = qy.in('team_id', [...aliveTeamIds])
+    return qy.order('price', { ascending: false }).range(from, to)
+  })
 
   // Accumulated fantasy points per player (their contribution to date).
-  const { data: statRows } = await supabase.from('player_match_stats').select('player_id, fantasy_points')
+  const statRows = await fetchAll((from, to) =>
+    supabase.from('player_match_stats').select('player_id, fantasy_points').range(from, to)
+  )
   const ptsById = new Map<number, number>()
-  for (const s of statRows ?? []) {
+  for (const s of statRows) {
     ptsById.set(s.player_id as number, (ptsById.get(s.player_id as number) ?? 0) + (s.fantasy_points ?? 0))
   }
 
-  const players: Player[] = (rawPlayers ?? []).map((p) => {
+  const players: Player[] = rawPlayers.map((p) => {
     const team = Array.isArray(p.team) ? p.team[0] : p.team
     return {
       id: p.id as number,

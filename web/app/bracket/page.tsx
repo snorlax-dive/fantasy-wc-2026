@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { fetchAll } from '@/lib/supabase/fetchAll'
 import { BracketBoard, type TeamRow, type PlayerOption } from './bracket-board'
 
 export const dynamic = 'force-dynamic'
@@ -19,15 +20,17 @@ export default async function BracketPage() {
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [{ data: teams }, { data: players }, { data: picks }, { data: firstFx }] = await Promise.all([
+  const [{ data: teams }, { data: picks }, { data: firstFx }] = await Promise.all([
     supabase.from('teams').select('id, name, flag_url').order('name'),
-    supabase.from('players').select('id, name, team:teams(name)').order('name'),
     supabase
       .from('bracket_picks')
       .select('pick_type, team_id, player_id')
       .eq('user_id', user.id),
     supabase.from('fixtures').select('kickoff').order('kickoff', { ascending: true }).limit(1).maybeSingle(),
   ])
+  const players = await fetchAll((from, to) =>
+    supabase.from('players').select('id, name, team:teams(name)').order('name').range(from, to)
+  )
 
   const teamRows: TeamRow[] = (teams ?? []).map((t) => ({
     id: t.id as number,

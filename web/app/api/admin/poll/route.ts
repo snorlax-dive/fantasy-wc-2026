@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { fetchAll } from '@/lib/supabase/fetchAll'
 import { apiFootball, WORLD_CUP_LEAGUE, SEASON } from '@/lib/apiFootball'
 import { playerFantasyPoints, type Pos } from '@/lib/scoring'
 
@@ -61,8 +62,10 @@ export async function GET(req: Request) {
     const force = url.searchParams.get('force') === '1'
     const { data: ourFx } = await db.from('fixtures').select('id, api_fixture_id, finished')
     const fxByApi = new Map<number, any>((ourFx ?? []).map((r: any) => [r.api_fixture_id, r]))
-    const { data: ourPlayers } = await db.from('players').select('id, api_player_id, position')
-    const plByApi = new Map<number, any>((ourPlayers ?? []).map((r: any) => [r.api_player_id, r]))
+    const ourPlayers = await fetchAll((from, to) =>
+      db.from('players').select('id, api_player_id, position').range(from, to)
+    )
+    const plByApi = new Map<number, any>(ourPlayers.map((r: any) => [r.api_player_id, r]))
 
     // Only ingest matches finished in the API but not yet finished in our DB, so a
     // frequent cron stays cheap. `force=1` reprocesses all finished fixtures (corrections).

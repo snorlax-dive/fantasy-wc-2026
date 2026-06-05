@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { fetchAll } from '@/lib/supabase/fetchAll'
 import {
   scorePrediction,
   playerFantasyPoints,
@@ -49,15 +50,15 @@ export async function GET(req: Request) {
   const db = createAdminClient()
 
   try {
-    const [{ data: players }, { data: stats }, { data: fixtures }, { data: settingsRows }] =
-      await Promise.all([
-        db.from('players').select('id, position'),
-        db.from('player_match_stats').select('*'),
-        db
-          .from('fixtures')
-          .select('id, stage, score_a, score_b, had_red_card, finished, team_a, team_b, lock_time'),
-        db.from('settings').select('key, value'),
-      ])
+    const [{ data: fixtures }, { data: settingsRows }] = await Promise.all([
+      db
+        .from('fixtures')
+        .select('id, stage, score_a, score_b, had_red_card, finished, team_a, team_b, lock_time'),
+      db.from('settings').select('key, value'),
+    ])
+    // These can exceed 1000 rows — page through all of them.
+    const players = await fetchAll((from, to) => db.from('players').select('id, position').range(from, to))
+    const stats = await fetchAll((from, to) => db.from('player_match_stats').select('*').range(from, to))
     const settings = Object.fromEntries((settingsRows ?? []).map((r: any) => [r.key, r.value]))
     const perTargetCap = Number(settings['block_per_target_cap'] ?? 2)
     const posById = new Map<number, Pos>((players ?? []).map((p: any) => [p.id, p.position]))
@@ -96,7 +97,7 @@ export async function GET(req: Request) {
 
     // --- 2. predictions ---
     const fxById = new Map<number, any>(allFixtures.map((f: any) => [f.id, f]))
-    const { data: preds } = await db.from('predictions').select('*')
+    const preds = await fetchAll((from, to) => db.from('predictions').select('*').range(from, to))
     const predUpdates: any[] = []
     for (const p of preds ?? []) {
       const f = fxById.get(p.fixture_id)
@@ -146,7 +147,9 @@ export async function GET(req: Request) {
 
     // --- 3. squads (captain x2 + differential bonus + blocks, per stage) ---
     const { data: squads } = await db.from('squads').select('id, user_id, stage, budget_used')
-    const { data: sps } = await db.from('squad_players').select('squad_id, player_id, is_captain')
+    const sps = await fetchAll((from, to) =>
+      db.from('squad_players').select('squad_id, player_id, is_captain').range(from, to)
+    )
     const playersBySquad = new Map<string, { player_id: number; is_captain: boolean }[]>()
     for (const sp of sps ?? []) {
       if (!playersBySquad.has(sp.squad_id)) playersBySquad.set(sp.squad_id, [])

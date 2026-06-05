@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { fetchAll } from '@/lib/supabase/fetchAll'
 import { BlocksBoard, type Rival } from './blocks-board'
 
 export const dynamic = 'force-dynamic'
@@ -47,7 +48,9 @@ export default async function BlocksPage() {
       ? await admin.from('squad_players').select('squad_id, player_id').in('squad_id', squadIds)
       : { data: [] as any[] }
   const { data: profs } = await admin.from('profiles').select('id, display_name')
-  const { data: players } = await admin.from('players').select('id, name, position')
+  const players = await fetchAll((from, to) =>
+    admin.from('players').select('id, name, position').range(from, to)
+  )
 
   const nameByUser = new Map<string, string>((profs ?? []).map((p: any) => [p.id, p.display_name]))
   const playerById = new Map<number, any>((players ?? []).map((p: any) => [p.id, p]))
