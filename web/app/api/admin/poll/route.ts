@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import { apiFootball, WORLD_CUP_LEAGUE, SEASON } from '@/lib/apiFootball'
 import { playerFantasyPoints, type Pos } from '@/lib/scoring'
 
@@ -7,19 +8,29 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-function authorized(req: Request): boolean {
+async function authorized(req: Request): Promise<boolean> {
   const secret = process.env.CRON_SECRET
-  if (!secret) return false
   const auth = req.headers.get('authorization') ?? ''
   const key = new URL(req.url).searchParams.get('key')
-  return auth === `Bearer ${secret}` || key === secret
+  if (secret && (auth === `Bearer ${secret}` || key === secret)) return true
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return false
+  const { data } = await supabase
+    .from('profiles')
+    .select('is_commissioner')
+    .eq('id', user.id)
+    .maybeSingle()
+  return data?.is_commissioner === true
 }
 
 const FINISHED = new Set(['FT', 'AET', 'PEN'])
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export async function GET(req: Request) {
-  if (!authorized(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  if (!(await authorized(req))) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
   const url = new URL(req.url)
   const season = parseInt(url.searchParams.get('season') ?? String(SEASON), 10)

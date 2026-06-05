@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import { apiFootball, WORLD_CUP_LEAGUE, SEASON } from '@/lib/apiFootball'
 import { teamStrength } from '@/lib/teamStrength'
 
@@ -7,13 +8,23 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-// ---- auth: require the CRON_SECRET via Bearer header or ?key= ----
-function authorized(req: Request): boolean {
+// ---- auth: CRON_SECRET (Bearer / ?key=) OR an authenticated commissioner ----
+async function authorized(req: Request): Promise<boolean> {
   const secret = process.env.CRON_SECRET
-  if (!secret) return false
   const auth = req.headers.get('authorization') ?? ''
   const key = new URL(req.url).searchParams.get('key')
-  return auth === `Bearer ${secret}` || key === secret
+  if (secret && (auth === `Bearer ${secret}` || key === secret)) return true
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return false
+  const { data } = await supabase
+    .from('profiles')
+    .select('is_commissioner')
+    .eq('id', user.id)
+    .maybeSingle()
+  return data?.is_commissioner === true
 }
 
 type Pos = 'GK' | 'DEF' | 'MID' | 'FWD'
@@ -44,7 +55,7 @@ function priceFor(pos: Pos, strength: number, apiPlayerId: number): number {
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export async function GET(req: Request) {
-  if (!authorized(req)) {
+  if (!(await authorized(req))) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 

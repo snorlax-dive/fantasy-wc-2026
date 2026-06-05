@@ -64,6 +64,14 @@ export default async function Home() {
           >
             Leaderboard →
           </a>
+          {profile?.is_commissioner && (
+            <a
+              href="/admin"
+              className="block rounded-lg border border-amber-800 bg-amber-950/30 px-4 py-2 text-sm font-semibold text-amber-300 transition hover:bg-amber-950/50"
+            >
+              Commissioner panel →
+            </a>
+          )}
         </div>
 
         <form action="/auth/signout" method="post" className="mt-4">

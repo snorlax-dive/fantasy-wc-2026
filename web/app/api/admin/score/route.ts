@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import {
   scorePrediction,
   playerFantasyPoints,
@@ -14,12 +15,22 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-function authorized(req: Request): boolean {
+async function authorized(req: Request): Promise<boolean> {
   const secret = process.env.CRON_SECRET
-  if (!secret) return false
   const auth = req.headers.get('authorization') ?? ''
   const key = new URL(req.url).searchParams.get('key')
-  return auth === `Bearer ${secret}` || key === secret
+  if (secret && (auth === `Bearer ${secret}` || key === secret)) return true
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return false
+  const { data } = await supabase
+    .from('profiles')
+    .select('is_commissioner')
+    .eq('id', user.id)
+    .maybeSingle()
+  return data?.is_commissioner === true
 }
 
 async function chunkedUpsert(db: any, table: string, rows: any[], onConflict: string) {
@@ -34,7 +45,7 @@ const REACH_LEVEL: Record<string, number> = { REACH_R16: 2, REACH_QF: 3, REACH_S
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export async function GET(req: Request) {
-  if (!authorized(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  if (!(await authorized(req))) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   const db = createAdminClient()
 
   try {
