@@ -53,21 +53,24 @@ export async function GET(req: Request) {
   const dry = url.searchParams.get('dry') === '1'
   const offset = parseInt(url.searchParams.get('offset') ?? '0', 10)
   const limit = parseInt(url.searchParams.get('limit') ?? '12', 10)
+  // Season is overridable so we can build on free 2022 data and switch to 2026 later.
+  const season = parseInt(url.searchParams.get('season') ?? String(SEASON), 10)
   const db = createAdminClient()
 
   try {
     // ---------- STEP: base (teams + fixtures) ----------
     if (step === 'base') {
-      const teams = await apiFootball<any>('/teams', { league: WORLD_CUP_LEAGUE, season: SEASON })
+      const teams = await apiFootball<any>('/teams', { league: WORLD_CUP_LEAGUE, season })
       const fixtures = await apiFootball<any>('/fixtures', {
         league: WORLD_CUP_LEAGUE,
-        season: SEASON,
+        season,
       })
 
       if (dry) {
         return NextResponse.json({
           dry: true,
           step,
+          season,
           teamCount: teams.length,
           fixtureCount: fixtures.length,
           sampleTeam: teams[0] ?? null,
