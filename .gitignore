@@ -1,0 +1,21 @@
+# dependencies
+**/node_modules
+
+# next.js
+web/.next
+web/out
+web/.vercel
+web/next-env.d.ts
+
+# env files (never commit secrets)
+**/.env
+**/.env.local
+**/.env*.local
+
+# misc
+.DS_Store
+*.pem
+**/*.tsbuildinfo
+
+# python sim artifacts
+__pycache__/
