@@ -20,6 +20,7 @@ const TILES = [
   { href: '/leaderboard', title: 'Table', emoji: '🏆' },
   { href: '/blocks', title: 'Blocks', emoji: '🛡️' },
   { href: '/profile', title: 'Your club', emoji: '🎽' },
+  { href: '/rules', title: 'Rules', emoji: '📖' },
 ]
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
