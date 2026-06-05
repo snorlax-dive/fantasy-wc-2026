@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { useMemo, useState, useTransition } from 'react'
 import { saveBracket } from './actions'
 
@@ -66,7 +65,6 @@ export function BracketBoard({
       const next = { ...prev }
       if (level === 0) delete next[teamId]
       else next[teamId] = level
-      // enforce single champion: demote any other champion to Final
       if (level === 5) {
         for (const k of Object.keys(next)) {
           const id = Number(k)
@@ -88,122 +86,115 @@ export function BracketBoard({
   }
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100">
-      <div className="mx-auto max-w-3xl px-4 py-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold">Bracket &amp; awards</h1>
-          <Link href="/" className="text-sm text-zinc-400 hover:text-zinc-200">
-            ← Home
-          </Link>
-        </div>
-        <p className="mt-1 text-sm text-zinc-400">
-          For each team, pick how far they go. R16 +1 · QF +2 · SF +4 · Final +8 · Champion +15 ·
-          Golden Boot +10. Locks at the first kickoff.
-        </p>
+    <main className="mx-auto w-full max-w-3xl px-4 py-5 pb-24 sm:pb-10">
+      <h1 className="text-xl font-extrabold text-cro-navy">Bracket &amp; awards</h1>
+      <p className="mt-1 text-sm text-slate-500">
+        For each team, pick how far they go. R16 +1 · QF +2 · SF +4 · Final +8 · Champion +15 · Golden
+        Boot +10. Locks at the first kickoff.
+      </p>
 
-        {locked && (
-          <div className="mt-4 rounded-lg border border-amber-900 bg-amber-950/40 p-3 text-sm text-amber-300">
-            The bracket is locked — read-only.
+      {locked && (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          The bracket is locked — read-only.
+        </div>
+      )}
+
+      <div className="mt-4 grid grid-cols-5 gap-2 text-center text-xs">
+        <Counter label="R16" value={counts.r16} max={16} />
+        <Counter label="QF" value={counts.qf} max={8} />
+        <Counter label="SF" value={counts.sf} max={4} />
+        <Counter label="Final" value={counts.final} max={2} />
+        <Counter label="Champ" value={counts.champ} max={1} />
+      </div>
+
+      {/* Golden boot */}
+      <div className="mt-5 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+        <h2 className="text-sm font-bold text-cro-navy">Golden Boot (top scorer) — +10</h2>
+        {gbName ? (
+          <div className="mt-2 flex items-center gap-2 text-sm">
+            <span className="rounded bg-amber-50 px-2 py-1 font-semibold text-amber-800 ring-1 ring-amber-200">
+              {gbName.name} · {gbName.team}
+            </span>
+            {!locked && (
+              <button onClick={() => setGoldenBoot(null)} className="text-xs text-slate-400 hover:text-red-600">
+                clear
+              </button>
+            )}
           </div>
-        )}
-
-        <div className="mt-4 grid grid-cols-5 gap-2 text-center text-xs">
-          <Counter label="R16" value={counts.r16} max={16} />
-          <Counter label="QF" value={counts.qf} max={8} />
-          <Counter label="SF" value={counts.sf} max={4} />
-          <Counter label="Final" value={counts.final} max={2} />
-          <Counter label="Champ" value={counts.champ} max={1} />
-        </div>
-
-        {/* Golden boot */}
-        <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
-          <h2 className="text-sm font-semibold">Golden Boot (top scorer) — +10</h2>
-          {gbName ? (
-            <div className="mt-2 flex items-center gap-2 text-sm">
-              <span className="rounded bg-amber-950/40 px-2 py-1 text-amber-300">
-                {gbName.name} · {gbName.team}
-              </span>
-              {!locked && (
-                <button onClick={() => setGoldenBoot(null)} className="text-xs text-zinc-500 hover:text-red-400">
-                  clear
-                </button>
+        ) : (
+          !locked && (
+            <div className="mt-2">
+              <input
+                value={gbQuery}
+                onChange={(e) => setGbQuery(e.target.value)}
+                placeholder="Search a player…"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-cro-red"
+              />
+              {gbResults.length > 0 && (
+                <ul className="mt-1 divide-y divide-slate-100 overflow-hidden rounded-lg ring-1 ring-slate-200">
+                  {gbResults.map((p) => (
+                    <li key={p.id}>
+                      <button
+                        onClick={() => {
+                          setGoldenBoot(p.id)
+                          setGbQuery('')
+                        }}
+                        className="flex w-full items-center justify-between bg-white px-3 py-1.5 text-left text-sm hover:bg-slate-50"
+                      >
+                        <span className="text-cro-navy">{p.name}</span>
+                        <span className="text-xs text-slate-400">{p.team}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
-          ) : (
-            !locked && (
-              <div className="mt-2">
-                <input
-                  value={gbQuery}
-                  onChange={(e) => setGbQuery(e.target.value)}
-                  placeholder="Search a player…"
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm outline-none focus:border-emerald-500"
-                />
-                {gbResults.length > 0 && (
-                  <ul className="mt-1 divide-y divide-zinc-900 rounded-lg border border-zinc-800">
-                    {gbResults.map((p) => (
-                      <li key={p.id}>
-                        <button
-                          onClick={() => {
-                            setGoldenBoot(p.id)
-                            setGbQuery('')
-                          }}
-                          className="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-zinc-800"
-                        >
-                          <span>{p.name}</span>
-                          <span className="text-xs text-zinc-500">{p.team}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )
-          )}
-        </div>
-
-        {/* Teams */}
-        <div className="mt-5">
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Filter teams…"
-            className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm outline-none focus:border-emerald-500"
-          />
-          <ul className="mt-2 divide-y divide-zinc-900 rounded-xl border border-zinc-800">
-            {filteredTeams.map((t) => (
-              <li key={t.id} className="flex items-center gap-3 px-3 py-2">
-                <span className="min-w-0 flex-1 truncate text-sm">{t.name}</span>
-                <select
-                  value={furthest[t.id] ?? 0}
-                  disabled={locked}
-                  onChange={(e) => setLevel(t.id, Number(e.target.value))}
-                  className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs outline-none focus:border-emerald-500 disabled:opacity-50"
-                >
-                  {LEVELS.map((l) => (
-                    <option key={l.v} value={l.v}>
-                      {l.label}
-                    </option>
-                  ))}
-                </select>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {msg?.error && <p className="mt-3 text-sm text-red-400">{msg.error}</p>}
-        {msg?.ok && <p className="mt-3 text-sm text-emerald-400">Bracket saved! ✅</p>}
-        {overLimit && <p className="mt-3 text-sm text-red-400">You&apos;re over a round limit — trim your picks.</p>}
-
-        {!locked && (
-          <button
-            onClick={onSave}
-            disabled={pending || overLimit}
-            className="mt-4 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-40"
-          >
-            {pending ? 'Saving…' : 'Save bracket'}
-          </button>
+          )
         )}
       </div>
+
+      {/* Teams */}
+      <div className="mt-5">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Filter teams…"
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-cro-red"
+        />
+        <ul className="mt-2 divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+          {filteredTeams.map((t) => (
+            <li key={t.id} className="flex items-center gap-3 px-3 py-2">
+              <span className="min-w-0 flex-1 truncate text-sm font-medium text-cro-navy">{t.name}</span>
+              <select
+                value={furthest[t.id] ?? 0}
+                disabled={locked}
+                onChange={(e) => setLevel(t.id, Number(e.target.value))}
+                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 outline-none focus:border-cro-red disabled:bg-slate-50"
+              >
+                {LEVELS.map((l) => (
+                  <option key={l.v} value={l.v}>
+                    {l.label}
+                  </option>
+                ))}
+              </select>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {msg?.error && <p className="mt-3 text-sm text-red-600">{msg.error}</p>}
+      {msg?.ok && <p className="mt-3 text-sm text-emerald-600">Bracket saved! ✅</p>}
+      {overLimit && <p className="mt-3 text-sm text-red-600">You&apos;re over a round limit — trim your picks.</p>}
+
+      {!locked && (
+        <button
+          onClick={onSave}
+          disabled={pending || overLimit}
+          className="mt-4 w-full rounded-xl bg-cro-red px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-cro-red-dark disabled:opacity-40"
+        >
+          {pending ? 'Saving…' : 'Save bracket'}
+        </button>
+      )}
     </main>
   )
 }
@@ -211,9 +202,13 @@ export function BracketBoard({
 function Counter({ label, value, max }: { label: string; value: number; max: number }) {
   const over = value > max
   return (
-    <div className={`rounded-lg border p-2 ${over ? 'border-red-800 bg-red-950/30' : 'border-zinc-800 bg-zinc-900/40'}`}>
-      <div className="text-zinc-500">{label}</div>
-      <div className={`font-semibold tabular-nums ${over ? 'text-red-400' : 'text-zinc-100'}`}>
+    <div
+      className={`rounded-lg p-2 shadow-sm ring-1 ${
+        over ? 'bg-red-50 ring-red-200' : 'bg-white ring-slate-200'
+      }`}
+    >
+      <div className="text-slate-400">{label}</div>
+      <div className={`font-extrabold tabular-nums ${over ? 'text-red-600' : 'text-cro-navy'}`}>
         {value}/{max}
       </div>
     </div>
