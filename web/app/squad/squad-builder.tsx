@@ -100,8 +100,7 @@ export function SquadBuilder({
             (q === '' ||
               p.name.toLowerCase().includes(q.toLowerCase()) ||
               p.team.toLowerCase().includes(q.toLowerCase()))
-        )
-        .slice(0, 80),
+        ),
     [players, tab, q]
   )
 
@@ -206,11 +205,12 @@ export function SquadBuilder({
                 {t === 'ALL' ? 'All' : t}
               </button>
             ))}
+            <span className="ml-auto text-xs font-medium text-slate-400">{filtered.length} players</span>
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search player or team…"
-              className="ml-auto w-40 rounded-lg border border-slate-300 bg-white px-3 py-1 text-sm outline-none focus:border-cro-red"
+              placeholder="Search…"
+              className="w-36 rounded-lg border border-slate-300 bg-white px-3 py-1 text-sm outline-none focus:border-cro-red"
             />
           </div>
 

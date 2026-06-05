@@ -132,7 +132,7 @@ export function PredictionsBoard({
             <section key={round} className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
               <button
                 onClick={() => toggleRound(round)}
-                className="sticky top-14 z-10 flex w-full items-center justify-between bg-cro-navy px-4 py-2 text-left text-white"
+                className="flex w-full items-center justify-between bg-cro-navy px-4 py-2 text-left text-white"
               >
                 <span className="text-sm font-bold">{round}</span>
                 <span className="flex items-center gap-2 text-xs">
