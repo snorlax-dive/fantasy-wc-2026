@@ -17,6 +17,7 @@ export type Player = {
 export type Formation = Record<Pos, number>
 
 const POSES: Pos[] = ['GK', 'DEF', 'MID', 'FWD']
+const POS_NAME: Record<Pos, string> = { GK: 'goalkeeper', DEF: 'defender', MID: 'midfielder', FWD: 'forward' }
 const FORMATIONS = ['3-4-3', '3-5-2', '4-3-3', '4-4-2', '4-5-1', '5-3-2', '5-4-1']
 
 function parse(f: string): Formation {
@@ -70,6 +71,8 @@ export function SquadBuilder({
   const [tab, setTab] = useState<Pos | 'ALL'>('ALL')
   const [nation, setNation] = useState('')
   const [q, setQ] = useState('')
+  const [picking, setPicking] = useState<Pos | null>(null)
+  const [pickQ, setPickQ] = useState('')
   const [pending, start] = useTransition()
   const [msg, setMsg] = useState<{ ok?: boolean; error?: string } | null>(null)
 
@@ -125,6 +128,25 @@ export function SquadBuilder({
       ),
     [players, tab, q, nation]
   )
+
+  const pickList = useMemo(() => {
+    if (!picking) return []
+    const s = pickQ.toLowerCase()
+    return players
+      .filter(
+        (p) =>
+          p.position === picking &&
+          !selected.includes(p.id) &&
+          (s === '' || p.name.toLowerCase().includes(s) || p.team.toLowerCase().includes(s))
+      )
+      .sort((a, b) => b.price - a.price)
+  }, [players, picking, pickQ, selected])
+
+  function addFromPicker(p: Player) {
+    toggle(p)
+    setPicking(null)
+    setPickQ('')
+  }
 
   function onSave() {
     start(async () => {
@@ -192,7 +214,7 @@ export function SquadBuilder({
                 />
               ))}
               {Array.from({ length: empties }).map((_, i) => (
-                <EmptyChip key={`${pos}-${i}`} pos={pos} />
+                <EmptyChip key={`${pos}-${i}`} pos={pos} onClick={() => !locked && setPicking(pos)} />
               ))}
             </div>
           )
@@ -333,6 +355,64 @@ export function SquadBuilder({
           </div>
         </section>
       )}
+
+      {/* Position picker (from tapping a + slot on the pitch) */}
+      {picking && (
+        <div
+          className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 sm:items-center sm:p-4"
+          onClick={() => setPicking(null)}
+        >
+          <div
+            className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl bg-white p-4 shadow-xl sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-cro-navy">
+                Add a {POS_NAME[picking]} · €{remaining.toFixed(1)}m left
+              </h3>
+              <button onClick={() => setPicking(null)} className="text-slate-400 hover:text-red-600">
+                ✕
+              </button>
+            </div>
+            <input
+              value={pickQ}
+              onChange={(e) => setPickQ(e.target.value)}
+              autoFocus
+              placeholder="Search player or team…"
+              className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-cro-red"
+            />
+            <ul className="mt-2 flex-1 divide-y divide-slate-100 overflow-auto">
+              {pickList.map((p) => {
+                const tooDear = p.price > remaining + 1e-9
+                return (
+                  <li key={p.id} className="flex items-center gap-3 py-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium text-cro-navy">{p.name}</div>
+                      <div className="truncate text-xs text-slate-400">{p.team}</div>
+                    </div>
+                    <span className="text-xs tabular-nums text-cro-blue">{p.points} pts</span>
+                    <span className="w-12 text-right text-sm font-semibold tabular-nums text-slate-700">
+                      €{p.price.toFixed(1)}
+                    </span>
+                    <button
+                      onClick={() => addFromPicker(p)}
+                      disabled={tooDear}
+                      className={`w-14 rounded-lg px-2 py-1 text-xs font-bold ${
+                        tooDear ? 'bg-slate-100 text-slate-400' : 'bg-cro-red text-white hover:bg-cro-red-dark'
+                      }`}
+                    >
+                      {tooDear ? 'over' : 'Add'}
+                    </button>
+                  </li>
+                )
+              })}
+              {pickList.length === 0 && (
+                <li className="py-6 text-center text-sm text-slate-400">No players found.</li>
+              )}
+            </ul>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
@@ -378,12 +458,15 @@ function PitchChip({
   )
 }
 
-function EmptyChip({ pos }: { pos: Pos }) {
+function EmptyChip({ pos, onClick }: { pos: Pos; onClick?: () => void }) {
   return (
-    <div className="flex w-16 flex-col items-center opacity-70">
-      <div className="flex h-9 w-9 items-center justify-center rounded-lg border-2 border-dashed border-white/60 text-sm text-white/80">
+    <div className="flex w-16 flex-col items-center">
+      <button
+        onClick={onClick}
+        className="flex h-9 w-9 items-center justify-center rounded-lg border-2 border-dashed border-white/70 text-base font-bold text-white transition hover:bg-white/25"
+      >
         +
-      </div>
+      </button>
       <div className="mt-1 text-[10px] font-medium text-white/80">{pos}</div>
     </div>
   )
