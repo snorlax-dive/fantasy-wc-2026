@@ -21,6 +21,10 @@ export default async function LeaderboardPage() {
 
   const { data, error } = await supabase.rpc('get_leaderboard')
   const rows = (data ?? []) as Row[]
+  const { data: profs } = await supabase.from('profiles').select('id, team_name, crest, color')
+  const idById = new Map(
+    (profs ?? []).map((p) => [p.id as string, p as { team_name: string | null; crest: string | null; color: string | null }])
+  )
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-5 pb-24 sm:pb-10">
@@ -46,9 +50,24 @@ export default async function LeaderboardPage() {
                 <td className="px-3 py-2.5 font-bold text-slate-400">
                   {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
                 </td>
-                <td className="px-3 py-2.5 font-semibold text-cro-navy">
-                  {r.display_name}
-                  {r.user_id === user.id && <span className="ml-1 text-xs font-bold text-cro-red">you</span>}
+                <td className="px-3 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-sm text-white"
+                      style={{ backgroundColor: idById.get(r.user_id)?.color ?? '#94a3b8' }}
+                    >
+                      {idById.get(r.user_id)?.crest ?? '⚽'}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold text-cro-navy">
+                        {idById.get(r.user_id)?.team_name || r.display_name}
+                        {r.user_id === user.id && <span className="ml-1 text-xs font-bold text-cro-red">you</span>}
+                      </div>
+                      {idById.get(r.user_id)?.team_name && (
+                        <div className="truncate text-[11px] text-slate-400">{r.display_name}</div>
+                      )}
+                    </div>
+                  </div>
                 </td>
                 <td className="px-2 py-2.5 text-right tabular-nums text-slate-500">{r.prediction_points}</td>
                 <td className="px-2 py-2.5 text-right tabular-nums text-slate-500">{r.fantasy_points}</td>

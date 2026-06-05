@@ -12,6 +12,7 @@ export type Player = {
   team: string
   flag: string | null
   points: number
+  owned: number
 }
 export type Formation = Record<Pos, number>
 
@@ -36,13 +37,20 @@ export function SquadBuilder({
   initialPicks,
   locked,
   stageLabel,
+  currentStage,
+  managerCount,
+  tripleCaptainStage,
 }: {
   players: Player[]
   budgetCap: number
   initialPicks: { player_id: number; is_captain: boolean }[]
   locked: boolean
   stageLabel?: string
+  currentStage: string
+  managerCount: number
+  tripleCaptainStage: string | null
 }) {
+  const tcUsedElsewhere = !!tripleCaptainStage && tripleCaptainStage !== currentStage
   const byId = useMemo(() => new Map(players.map((p) => [p.id, p])), [players])
   const [selected, setSelected] = useState<number[]>(initialPicks.map((p) => p.player_id))
   const [captain, setCaptain] = useState<number | null>(
@@ -58,6 +66,7 @@ export function SquadBuilder({
     return FORMATIONS.includes(s) ? s : '4-3-3'
   })
   const formation = parse(formationStr)
+  const [tripleCaptain, setTripleCaptain] = useState<boolean>(tripleCaptainStage === currentStage)
   const [tab, setTab] = useState<Pos | 'ALL'>('ALL')
   const [q, setQ] = useState('')
   const [pending, start] = useTransition()
@@ -106,7 +115,7 @@ export function SquadBuilder({
 
   function onSave() {
     start(async () => {
-      const res = await saveSquad({ playerIds: selected, captainId: captain })
+      const res = await saveSquad({ playerIds: selected, captainId: captain, tripleCaptain })
       setMsg(res)
     })
   }
@@ -177,6 +186,29 @@ export function SquadBuilder({
         })}
       </div>
 
+      {/* Triple Captain chip */}
+      {!locked && (
+        <label
+          className={`mt-3 flex items-center justify-between rounded-xl bg-white p-3 text-sm shadow-sm ring-1 ${
+            tripleCaptain ? 'ring-amber-300' : 'ring-slate-200'
+          } ${tcUsedElsewhere ? 'opacity-60' : 'cursor-pointer'}`}
+        >
+          <span>
+            <span className="font-bold text-cro-navy">🔱 Triple Captain</span>
+            <span className="ml-1 text-xs text-slate-500">captain scores 3× — once all tournament</span>
+            {tcUsedElsewhere && (
+              <span className="ml-1 text-xs font-semibold text-amber-700">· played in {tripleCaptainStage}</span>
+            )}
+          </span>
+          <input
+            type="checkbox"
+            checked={tripleCaptain}
+            disabled={tcUsedElsewhere}
+            onChange={(e) => setTripleCaptain(e.target.checked)}
+          />
+        </label>
+      )}
+
       {msg?.error && <p className="mt-3 text-sm text-red-600">{msg.error}</p>}
       {msg?.ok && <p className="mt-3 text-sm text-emerald-600">Squad saved! ✅</p>}
 
@@ -218,6 +250,7 @@ export function SquadBuilder({
             <div className="flex items-center gap-3 border-b border-slate-100 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-400">
               <span className="w-9 text-center">Pos</span>
               <span className="flex-1">Player</span>
+              <span className="w-10 text-right">Own</span>
               <span className="w-10 text-right">Pts</span>
               <span className="w-12 text-right">Price</span>
               <span className="w-16" />
@@ -234,6 +267,9 @@ export function SquadBuilder({
                       <div className="truncate text-sm font-medium text-cro-navy">{p.name}</div>
                       <div className="truncate text-xs text-slate-400">{p.team}</div>
                     </div>
+                    <span className="w-10 text-right text-xs tabular-nums text-slate-400">
+                      {managerCount > 0 ? Math.round((100 * p.owned) / managerCount) : 0}%
+                    </span>
                     <span className="w-10 text-right text-sm font-bold tabular-nums text-cro-blue">{p.points}</span>
                     <span className="w-12 text-right text-sm font-semibold tabular-nums text-slate-700">€{p.price.toFixed(1)}</span>
                     <button

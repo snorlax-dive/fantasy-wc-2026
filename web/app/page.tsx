@@ -10,6 +10,7 @@ const TILES = [
   { href: '/bracket', title: 'Bracket', desc: 'Knockout tree + awards', emoji: '🗺️' },
   { href: '/leaderboard', title: 'Leaderboard', desc: 'Who’s on top', emoji: '🏆' },
   { href: '/blocks', title: 'Blocks & shields', desc: 'Sabotage your rivals', emoji: '🛡️' },
+  { href: '/profile', title: 'Your club', desc: 'Name & crest', emoji: '🎽' },
 ]
 
 export default async function Home() {

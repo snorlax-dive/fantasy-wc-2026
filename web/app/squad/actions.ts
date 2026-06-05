@@ -8,6 +8,7 @@ type SaveResult = { ok?: boolean; error?: string }
 export async function saveSquad(input: {
   playerIds: number[]
   captainId: number | null
+  tripleCaptain?: boolean
 }): Promise<SaveResult> {
   const supabase = await createClient()
   const {
@@ -62,6 +63,19 @@ export async function saveSquad(input: {
     return { error: `Over budget: €${spend.toFixed(1)}m / €${budgetCap}m.` }
   }
 
+  // Triple Captain chip (once per tournament) — block if already played elsewhere.
+  if (input.tripleCaptain) {
+    const { data: ex } = await supabase
+      .from('chip_uses')
+      .select('stage')
+      .eq('user_id', user.id)
+      .eq('chip', 'TRIPLE_CAPTAIN')
+      .maybeSingle()
+    if (ex && ex.stage !== stage) {
+      return { error: `Triple Captain already played in a previous round (${ex.stage}).` }
+    }
+  }
+
   // Upsert the squad row, then replace its players.
   const { data: squad, error: sErr } = await supabase
     .from('squads')
@@ -78,6 +92,19 @@ export async function saveSquad(input: {
   }))
   const { error: spErr } = await supabase.from('squad_players').insert(rows)
   if (spErr) return { error: spErr.message }
+
+  if (input.tripleCaptain) {
+    await supabase
+      .from('chip_uses')
+      .upsert({ user_id: user.id, chip: 'TRIPLE_CAPTAIN', stage }, { onConflict: 'user_id,chip' })
+  } else {
+    await supabase
+      .from('chip_uses')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('chip', 'TRIPLE_CAPTAIN')
+      .eq('stage', stage)
+  }
 
   return { ok: true }
 }

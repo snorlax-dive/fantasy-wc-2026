@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { fetchAll } from '@/lib/supabase/fetchAll'
 import { SquadBuilder, type Player } from './squad-builder'
 
@@ -41,16 +42,35 @@ export default async function SquadPage() {
   const locked =
     settings['tournament_locked'] === true || (firstKickoff ? new Date(firstKickoff) <= new Date() : false)
 
-  const rawPlayers = await fetchAll((from, to) => {
-    let qy = supabase
-      .from('players')
-      .select('id, name, position, price, team:teams(name, flag_url)')
-      .eq('active', true)
-    if (aliveTeamIds.size > 0) qy = qy.in('team_id', [...aliveTeamIds])
-    return qy.order('price', { ascending: false }).range(from, to)
-  })
+  // League ownership for this stage (cross-user → admin read).
+  const admin = createAdminClient()
+  const { data: stageSquads } = await admin.from('squads').select('id').eq('stage', stage)
+  const stageSquadIds = (stageSquads ?? []).map((s) => s.id)
+  const managerCount = stageSquadIds.length
+  const ownedBy: Record<number, number> = {}
+  if (stageSquadIds.length > 0) {
+    const ownRows = await fetchAll((from, to) =>
+      admin.from('squad_players').select('player_id').in('squad_id', stageSquadIds).range(from, to)
+    )
+    for (const r of ownRows) ownedBy[r.player_id as number] = (ownedBy[r.player_id as number] ?? 0) + 1
+  }
 
-  // Accumulated fantasy points per player (their contribution to date).
+  // Triple Captain chip status.
+  const { data: tcChip } = await supabase
+    .from('chip_uses')
+    .select('stage')
+    .eq('user_id', user.id)
+    .eq('chip', 'TRIPLE_CAPTAIN')
+    .maybeSingle()
+  const tripleCaptainStage = (tcChip?.stage as string) ?? null
+
+  let playersQuery = supabase
+    .from('players')
+    .select('id, name, position, price, team:teams(name, flag_url)')
+    .eq('active', true)
+  if (aliveTeamIds.size > 0) playersQuery = playersQuery.in('team_id', [...aliveTeamIds])
+  const rawPlayers = await fetchAll((from, to) => playersQuery.order('price', { ascending: false }).range(from, to))
+
   const statRows = await fetchAll((from, to) =>
     supabase.from('player_match_stats').select('player_id, fantasy_points').range(from, to)
   )
@@ -69,6 +89,7 @@ export default async function SquadPage() {
       team: team?.name ?? '',
       flag: team?.flag_url ?? null,
       points: ptsById.get(p.id as number) ?? 0,
+      owned: ownedBy[p.id as number] ?? 0,
     }
   })
 
@@ -95,6 +116,9 @@ export default async function SquadPage() {
       initialPicks={initialPicks}
       locked={locked}
       stageLabel={STAGE_LABEL[stage] ?? stage}
+      currentStage={stage}
+      managerCount={managerCount}
+      tripleCaptainStage={tripleCaptainStage}
     />
   )
 }

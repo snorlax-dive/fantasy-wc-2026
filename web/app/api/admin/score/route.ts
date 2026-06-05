@@ -130,6 +130,8 @@ export async function GET(req: Request) {
       .eq('revealed', true)
     const { data: shields } = await db.from('shield_uses').select('user_id, stage')
     const shieldSet = new Set<string>((shields ?? []).map((s: any) => `${s.user_id}:${s.stage}`))
+    const { data: chips } = await db.from('chip_uses').select('user_id, stage').eq('chip', 'TRIPLE_CAPTAIN')
+    const tcSet = new Set<string>((chips ?? []).map((c: any) => `${c.user_id}:${c.stage}`))
     const blocksByTarget = new Map<string, { player_id: number; committed_at: string }[]>()
     for (const b of blocks ?? []) {
       const k = `${b.target}:${b.stage}`
@@ -170,12 +172,13 @@ export async function GET(req: Request) {
       const n = stageSquads.length || 1
       for (const sq of stageSquads) {
         const blocked = blockedFor(sq.user_id, stage)
+        const isTC = tcSet.has(`${sq.user_id}:${stage}`) // Triple Captain played this round
         let total = 0
         for (const sp of playersBySquad.get(sq.id) ?? []) {
           if (blocked.has(sp.player_id)) continue // blocked → 0 (incl. captain & differential)
           const t = stageTotals.get(totalsKey(sp.player_id, stage)) ?? { fantasy: 0, goals: 0 }
           total += t.fantasy
-          if (sp.is_captain) total += t.fantasy
+          if (sp.is_captain) total += t.fantasy * (isTC ? 2 : 1) // ×2 normally, ×3 with Triple Captain
           if ((ownership.get(sp.player_id) ?? 0) / n < DIFFERENTIAL_THRESHOLD)
             total += DIFFERENTIAL_BONUS_PER_GOAL * t.goals
         }
