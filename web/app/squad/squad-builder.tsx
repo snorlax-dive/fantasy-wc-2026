@@ -1,6 +1,5 @@
 'use client'
 
-import Link from 'next/link'
 import { useMemo, useState, useTransition } from 'react'
 import { saveSquad } from './actions'
 
@@ -10,6 +9,11 @@ export type Formation = Record<Pos, number>
 
 const POSES: Pos[] = ['GK', 'DEF', 'MID', 'FWD']
 const POS_LABEL: Record<Pos, string> = { GK: 'Goalkeepers', DEF: 'Defenders', MID: 'Midfielders', FWD: 'Forwards' }
+
+function surname(name: string) {
+  const parts = name.trim().split(' ')
+  return parts.length > 1 ? parts[parts.length - 1] : name
+}
 
 export function SquadBuilder({
   players,
@@ -74,7 +78,7 @@ export function SquadBuilder({
               p.name.toLowerCase().includes(q.toLowerCase()) ||
               p.team.toLowerCase().includes(q.toLowerCase()))
         )
-        .slice(0, 100),
+        .slice(0, 80),
     [players, tab, q]
   )
 
@@ -86,170 +90,185 @@ export function SquadBuilder({
   }
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100">
-      <div className="mx-auto max-w-5xl px-4 py-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-semibold">Build your squad</h1>
-            {stageLabel && <p className="text-xs text-emerald-400">{stageLabel}</p>}
-          </div>
-          <Link href="/" className="text-sm text-zinc-400 hover:text-zinc-200">
-            ← Home
-          </Link>
-        </div>
-
-        {locked && (
-          <div className="mt-4 rounded-lg border border-amber-900 bg-amber-950/40 p-3 text-sm text-amber-300">
-            Squads are locked — the tournament has started. This is a read-only view.
-          </div>
-        )}
-
-        {/* Budget + formation summary */}
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Stat label="Players" value={`${selected.length}/11`} ok={selected.length === 11} />
-          <Stat
-            label="Formation"
-            value={`${counts.GK}-${counts.DEF}-${counts.MID}-${counts.FWD}`}
-            ok={formationOk}
-          />
-          <Stat label="Spent" value={`€${spend.toFixed(1)}m`} ok={remaining >= -1e-9} />
-          <Stat
-            label="Remaining"
-            value={`€${remaining.toFixed(1)}m`}
-            ok={remaining >= -1e-9}
-          />
-        </div>
-
-        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px]">
-          {/* Player pool */}
-          <section>
-            <div className="flex flex-wrap items-center gap-2">
-              {(['ALL', ...POSES] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setTab(t)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${
-                    tab === t ? 'bg-emerald-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-                  }`}
-                >
-                  {t === 'ALL' ? 'All' : t}
-                </button>
-              ))}
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Search player or team…"
-                className="ml-auto w-44 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-1 text-sm outline-none focus:border-emerald-500"
-              />
-            </div>
-
-            <ul className="mt-3 divide-y divide-zinc-900 rounded-xl border border-zinc-800">
-              {filtered.map((p) => {
-                const isSel = selected.includes(p.id)
-                const slotFull = !isSel && counts[p.position] >= formation[p.position]
-                const wouldOverflow = !isSel && selected.length >= 11
-                const disabled = locked || slotFull || wouldOverflow
-                return (
-                  <li key={p.id} className="flex items-center gap-3 px-3 py-2">
-                    <span className="w-8 text-xs font-semibold text-zinc-500">{p.position}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm">{p.name}</div>
-                      <div className="truncate text-xs text-zinc-500">{p.team}</div>
-                    </div>
-                    <span className="text-sm tabular-nums text-zinc-300">€{p.price.toFixed(1)}</span>
-                    <button
-                      onClick={() => toggle(p)}
-                      disabled={disabled}
-                      className={`w-16 rounded-lg px-2 py-1 text-xs font-semibold ${
-                        isSel
-                          ? 'bg-red-600/80 text-white hover:bg-red-600'
-                          : disabled
-                            ? 'bg-zinc-800 text-zinc-600'
-                            : 'bg-emerald-600 text-white hover:bg-emerald-500'
-                      }`}
-                    >
-                      {isSel ? 'Remove' : slotFull ? 'Full' : 'Add'}
-                    </button>
-                  </li>
-                )
-              })}
-              {filtered.length === 0 && (
-                <li className="px-3 py-6 text-center text-sm text-zinc-500">No players match.</li>
-              )}
-            </ul>
-          </section>
-
-          {/* Your XI */}
-          <section className="lg:sticky lg:top-6 lg:self-start">
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
-              <h2 className="text-sm font-semibold text-zinc-300">Your XI — tap ★ to set captain</h2>
-              <div className="mt-3 space-y-3">
-                {POSES.map((pos) => (
-                  <div key={pos}>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                      {POS_LABEL[pos]} ({counts[pos]}/{formation[pos]})
-                    </div>
-                    <ul className="mt-1 space-y-1">
-                      {selectedPlayers
-                        .filter((p) => p.position === pos)
-                        .map((p) => (
-                          <li key={p.id} className="flex items-center gap-2 text-sm">
-                            <button
-                              onClick={() => !locked && setCaptain(p.id)}
-                              title="Set captain"
-                              className={captain === p.id ? 'text-amber-400' : 'text-zinc-600 hover:text-zinc-400'}
-                            >
-                              ★
-                            </button>
-                            <span className="min-w-0 flex-1 truncate">{p.name}</span>
-                            <span className="tabular-nums text-zinc-400">€{p.price.toFixed(1)}</span>
-                            {!locked && (
-                              <button
-                                onClick={() => toggle(p)}
-                                className="text-zinc-600 hover:text-red-400"
-                                title="Remove"
-                              >
-                                ✕
-                              </button>
-                            )}
-                          </li>
-                        ))}
-                      {counts[pos] === 0 && <li className="text-xs text-zinc-600">— none —</li>}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-
-              {msg?.error && <p className="mt-3 text-sm text-red-400">{msg.error}</p>}
-              {msg?.ok && <p className="mt-3 text-sm text-emerald-400">Squad saved! ✅</p>}
-
-              {!locked && (
-                <button
-                  onClick={onSave}
-                  disabled={!canSave || pending}
-                  className="mt-4 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-40"
-                >
-                  {pending ? 'Saving…' : 'Save squad'}
-                </button>
-              )}
-              {!canSave && !locked && (
-                <p className="mt-2 text-center text-xs text-zinc-500">
-                  Fill all 11 slots in formation, stay within budget, and pick a captain to save.
-                </p>
-              )}
-            </div>
-          </section>
+    <main className="mx-auto w-full max-w-3xl px-4 py-5 pb-28 sm:pb-10">
+      <div className="flex items-end justify-between">
+        <div>
+          <h1 className="text-xl font-extrabold text-cro-navy">Build your squad</h1>
+          {stageLabel && <p className="text-xs font-semibold text-cro-red">{stageLabel}</p>}
         </div>
       </div>
+
+      {locked && (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          Squads are locked for this round — read-only.
+        </div>
+      )}
+
+      {/* Stats */}
+      <div className="mt-4 grid grid-cols-4 gap-2">
+        <Stat label="Players" value={`${selected.length}/11`} ok={selected.length === 11} />
+        <Stat label="Shape" value={`${counts.DEF}-${counts.MID}-${counts.FWD}`} ok={formationOk} />
+        <Stat label="Spent" value={`€${spend.toFixed(1)}`} ok={remaining >= -1e-9} />
+        <Stat label="Left" value={`€${remaining.toFixed(1)}`} ok={remaining >= -1e-9} />
+      </div>
+
+      {/* Pitch */}
+      <div className="pitch mt-4 rounded-2xl p-3 shadow-inner ring-1 ring-black/10">
+        {POSES.map((pos) => {
+          const here = selectedPlayers.filter((p) => p.position === pos)
+          const empties = Math.max(0, formation[pos] - here.length)
+          return (
+            <div key={pos} className="flex flex-wrap justify-center gap-3 py-2">
+              {here.map((p) => (
+                <PitchChip
+                  key={p.id}
+                  p={p}
+                  isCaptain={captain === p.id}
+                  locked={locked}
+                  onCaptain={() => !locked && setCaptain(p.id)}
+                  onRemove={() => toggle(p)}
+                />
+              ))}
+              {Array.from({ length: empties }).map((_, i) => (
+                <EmptyChip key={`${pos}-${i}`} pos={pos} />
+              ))}
+            </div>
+          )
+        })}
+      </div>
+
+      {msg?.error && <p className="mt-3 text-sm text-red-600">{msg.error}</p>}
+      {msg?.ok && <p className="mt-3 text-sm text-emerald-600">Squad saved! ✅</p>}
+
+      {!locked && (
+        <button
+          onClick={onSave}
+          disabled={!canSave || pending}
+          className="mt-3 w-full rounded-xl bg-cro-red px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-cro-red-dark disabled:opacity-40"
+        >
+          {pending ? 'Saving…' : 'Save squad'}
+        </button>
+      )}
+
+      {/* Player pool */}
+      {!locked && (
+        <section className="mt-6">
+          <div className="flex flex-wrap items-center gap-2">
+            {(['ALL', ...POSES] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                  tab === t ? 'bg-cro-navy text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                {t === 'ALL' ? 'All' : t}
+              </button>
+            ))}
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search player or team…"
+              className="ml-auto w-44 rounded-lg border border-slate-300 bg-white px-3 py-1 text-sm outline-none focus:border-cro-red"
+            />
+          </div>
+
+          <ul className="mt-3 divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+            {filtered.map((p) => {
+              const isSel = selected.includes(p.id)
+              const slotFull = !isSel && counts[p.position] >= formation[p.position]
+              const disabled = (slotFull || selected.length >= 11) && !isSel
+              return (
+                <li key={p.id} className="flex items-center gap-3 px-3 py-2">
+                  <span className="w-9 text-center text-[10px] font-bold text-slate-400">{p.position}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium text-cro-navy">{p.name}</div>
+                    <div className="truncate text-xs text-slate-400">{p.team}</div>
+                  </div>
+                  <span className="text-sm font-semibold tabular-nums text-slate-700">€{p.price.toFixed(1)}</span>
+                  <button
+                    onClick={() => toggle(p)}
+                    disabled={disabled}
+                    className={`w-16 rounded-lg px-2 py-1 text-xs font-bold transition ${
+                      isSel
+                        ? 'bg-red-100 text-red-600 hover:bg-red-200'
+                        : disabled
+                          ? 'bg-slate-100 text-slate-400'
+                          : 'bg-cro-red text-white hover:bg-cro-red-dark'
+                    }`}
+                  >
+                    {isSel ? 'Remove' : slotFull ? 'Full' : 'Add'}
+                  </button>
+                </li>
+              )
+            })}
+            {filtered.length === 0 && (
+              <li className="px-3 py-6 text-center text-sm text-slate-400">No players match.</li>
+            )}
+          </ul>
+        </section>
+      )}
     </main>
+  )
+}
+
+function PitchChip({
+  p,
+  isCaptain,
+  locked,
+  onCaptain,
+  onRemove,
+}: {
+  p: Player
+  isCaptain: boolean
+  locked: boolean
+  onCaptain: () => void
+  onRemove: () => void
+}) {
+  return (
+    <div className="relative flex w-16 flex-col items-center">
+      {!locked && (
+        <button
+          onClick={onRemove}
+          title="Remove"
+          className="absolute -right-1 -top-1 z-10 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] font-bold text-slate-500 shadow ring-1 ring-slate-200"
+        >
+          ✕
+        </button>
+      )}
+      <button
+        onClick={onCaptain}
+        title="Set captain"
+        className={`flex h-9 w-9 items-center justify-center rounded-lg text-xs font-extrabold shadow ${
+          isCaptain ? 'bg-cro-navy text-white ring-2 ring-yellow-300' : 'bg-white text-cro-red'
+        }`}
+      >
+        {isCaptain ? 'C' : p.position}
+      </button>
+      <div className="mt-1 w-full truncate rounded bg-white/95 px-1 text-center text-[10px] font-semibold text-cro-navy">
+        {surname(p.name)}
+      </div>
+      <div className="text-[10px] font-medium text-white">€{p.price.toFixed(1)}</div>
+    </div>
+  )
+}
+
+function EmptyChip({ pos }: { pos: Pos }) {
+  return (
+    <div className="flex w-16 flex-col items-center opacity-70">
+      <div className="flex h-9 w-9 items-center justify-center rounded-lg border-2 border-dashed border-white/60 text-sm text-white/80">
+        +
+      </div>
+      <div className="mt-1 text-[10px] font-medium text-white/80">{pos}</div>
+    </div>
   )
 }
 
 function Stat({ label, value, ok }: { label: string; value: string; ok: boolean }) {
   return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
-      <div className="text-xs text-zinc-500">{label}</div>
-      <div className={`mt-0.5 text-lg font-semibold tabular-nums ${ok ? 'text-zinc-100' : 'text-red-400'}`}>
+    <div className="rounded-xl bg-white p-2.5 text-center shadow-sm ring-1 ring-slate-200">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
+      <div className={`mt-0.5 text-base font-extrabold tabular-nums ${ok ? 'text-cro-navy' : 'text-red-600'}`}>
         {value}
       </div>
     </div>

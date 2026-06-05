@@ -1,26 +1,45 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  /* Croatia-inspired palette */
+  --color-cro-red: #e4002b;
+  --color-cro-red-dark: #b8001f;
+  --color-cro-navy: #0e1c4e;
+  --color-cro-blue: #1e5bb8;
+  --color-pitch: #1f8c3b;
+  --color-pitch-dark: #176e2e;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  --background: #eef1f5;
+  --foreground: #0f172a;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+}
+
+/* Croatia red/white checkerboard (axis-aligned) */
+.checker {
+  background: repeating-conic-gradient(#e4002b 0 25%, #ffffff 0 50%) 0 0 / 20px 20px;
+}
+.checker-sm {
+  background: repeating-conic-gradient(#e4002b 0 25%, #ffffff 0 50%) 0 0 / 10px 10px;
+}
+
+/* FPL-style football pitch */
+.pitch {
+  background-color: var(--color-pitch);
+  background-image: repeating-linear-gradient(
+    0deg,
+    color-mix(in srgb, var(--color-pitch) 100%, white 6%) 0 36px,
+    var(--color-pitch-dark) 36px 72px
+  );
 }

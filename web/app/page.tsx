@@ -1,87 +1,64 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+
+export const dynamic = 'force-dynamic'
+
+const TILES = [
+  { href: '/squad', title: 'Squad', desc: 'Build your XI', emoji: '⚽' },
+  { href: '/predictions', title: 'Predictions', desc: 'Scores · scorers · cards', emoji: '🎯' },
+  { href: '/bracket', title: 'Bracket', desc: 'Knockout tree + awards', emoji: '🗺️' },
+  { href: '/leaderboard', title: 'Leaderboard', desc: 'Who’s on top', emoji: '🏆' },
+  { href: '/blocks', title: 'Blocks & shields', desc: 'Sabotage your rivals', emoji: '🛡️' },
+]
 
 export default async function Home() {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
-
   if (!user) redirect('/login')
 
-  // `profiles` may not exist yet on a fresh project (before the migration is run) —
-  // fall back to the email so the first deploy still renders.
   const { data: profile } = await supabase
     .from('profiles')
     .select('display_name, is_commissioner')
     .eq('id', user.id)
     .maybeSingle()
-
   const name = profile?.display_name ?? user.email
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 bg-zinc-950 p-6 text-zinc-100">
-      <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900/60 p-8 text-center shadow-xl">
-        <p className="text-sm uppercase tracking-widest text-emerald-400">Fantasy World Cup 2026</p>
-        <h1 className="mt-2 text-2xl font-semibold">Welcome, {name} ⚽</h1>
-        <p className="mt-2 text-sm text-zinc-400">
-          You&apos;re signed in. The leaderboard lands next.
-        </p>
-        {profile?.is_commissioner && (
-          <p className="mt-3 inline-block rounded-full bg-amber-950/50 px-3 py-1 text-xs text-amber-300">
-            Commissioner
+    <main className="mx-auto w-full max-w-3xl px-4 py-5 pb-24 sm:pb-10">
+      <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+        <div className="p-5">
+          <p className="text-xs font-bold uppercase tracking-widest text-cro-red">Fantasy World Cup 2026</p>
+          <h1 className="mt-1 text-2xl font-extrabold text-cro-navy">Welcome, {name} ⚽</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Lock your squad, predictions, and bracket before the first kickoff.
           </p>
-        )}
-
-        <div className="mt-6 grid gap-2">
-          <a
-            href="/squad"
-            className="block rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
-          >
-            Build your squad →
-          </a>
-          <a
-            href="/predictions"
-            className="block rounded-lg border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800"
-          >
-            Make predictions →
-          </a>
-          <a
-            href="/bracket"
-            className="block rounded-lg border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800"
-          >
-            Fill your bracket →
-          </a>
-          <a
-            href="/blocks"
-            className="block rounded-lg border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800"
-          >
-            Blocks &amp; shields →
-          </a>
-          <a
-            href="/leaderboard"
-            className="block rounded-lg border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800"
-          >
-            Leaderboard →
-          </a>
           {profile?.is_commissioner && (
-            <a
+            <Link
               href="/admin"
-              className="block rounded-lg border border-amber-800 bg-amber-950/30 px-4 py-2 text-sm font-semibold text-amber-300 transition hover:bg-amber-950/50"
+              className="mt-3 inline-block rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800 ring-1 ring-amber-200"
             >
               Commissioner panel →
-            </a>
+            </Link>
           )}
         </div>
+        <div className="checker h-1.5 w-full" />
+      </section>
 
-        <form action="/auth/signout" method="post" className="mt-4">
-          <button
-            type="submit"
-            className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-300 transition hover:bg-zinc-800"
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        {TILES.map((t) => (
+          <Link
+            key={t.href}
+            href={t.href}
+            className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:ring-cro-red"
           >
-            Sign out
-          </button>
-        </form>
+            <div className="text-2xl">{t.emoji}</div>
+            <div className="mt-2 font-extrabold text-cro-navy">{t.title}</div>
+            <div className="text-xs text-slate-500">{t.desc}</div>
+          </Link>
+        ))}
       </div>
     </main>
   )

@@ -1,5 +1,4 @@
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
@@ -24,53 +23,50 @@ export default async function LeaderboardPage() {
   const rows = (data ?? []) as Row[]
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100">
-      <div className="mx-auto max-w-2xl px-4 py-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold">Leaderboard</h1>
-          <Link href="/" className="text-sm text-zinc-400 hover:text-zinc-200">
-            ← Home
-          </Link>
-        </div>
+    <main className="mx-auto w-full max-w-2xl px-4 py-5 pb-24 sm:pb-10">
+      <h1 className="text-xl font-extrabold text-cro-navy">Leaderboard</h1>
 
-        {error && <p className="mt-4 text-sm text-red-400">{error.message}</p>}
+      {error && <p className="mt-4 text-sm text-red-600">{error.message}</p>}
 
-        <div className="mt-4 overflow-hidden rounded-xl border border-zinc-800">
-          <table className="w-full text-sm">
-            <thead className="bg-zinc-900/60 text-xs uppercase tracking-wide text-zinc-500">
-              <tr>
-                <th className="px-3 py-2 text-left">#</th>
-                <th className="px-3 py-2 text-left">Manager</th>
-                <th className="px-2 py-2 text-right">Pred</th>
-                <th className="px-2 py-2 text-right">Fantasy</th>
-                <th className="px-2 py-2 text-right">Bracket</th>
-                <th className="px-3 py-2 text-right">Total</th>
+      <div className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+            <tr>
+              <th className="px-3 py-2 text-left">#</th>
+              <th className="px-3 py-2 text-left">Manager</th>
+              <th className="px-2 py-2 text-right">Pred</th>
+              <th className="px-2 py-2 text-right">Fan</th>
+              <th className="px-2 py-2 text-right">Brkt</th>
+              <th className="px-3 py-2 text-right">Total</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((r, i) => (
+              <tr key={r.user_id} className={r.user_id === user.id ? 'bg-red-50' : ''}>
+                <td className="px-3 py-2.5 font-bold text-slate-400">
+                  {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
+                </td>
+                <td className="px-3 py-2.5 font-semibold text-cro-navy">
+                  {r.display_name}
+                  {r.user_id === user.id && <span className="ml-1 text-xs font-bold text-cro-red">you</span>}
+                </td>
+                <td className="px-2 py-2.5 text-right tabular-nums text-slate-500">{r.prediction_points}</td>
+                <td className="px-2 py-2.5 text-right tabular-nums text-slate-500">{r.fantasy_points}</td>
+                <td className="px-2 py-2.5 text-right tabular-nums text-slate-500">{r.bracket_points}</td>
+                <td className="px-3 py-2.5 text-right text-base font-extrabold tabular-nums text-cro-navy">
+                  {r.total_points}
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-900">
-              {rows.map((r, i) => (
-                <tr key={r.user_id} className={r.user_id === user.id ? 'bg-emerald-950/20' : ''}>
-                  <td className="px-3 py-2 text-zinc-500">{i + 1}</td>
-                  <td className="px-3 py-2 font-medium">
-                    {r.display_name}
-                    {r.user_id === user.id && <span className="ml-1 text-xs text-emerald-400">(you)</span>}
-                  </td>
-                  <td className="px-2 py-2 text-right tabular-nums text-zinc-400">{r.prediction_points}</td>
-                  <td className="px-2 py-2 text-right tabular-nums text-zinc-400">{r.fantasy_points}</td>
-                  <td className="px-2 py-2 text-right tabular-nums text-zinc-400">{r.bracket_points}</td>
-                  <td className="px-3 py-2 text-right font-semibold tabular-nums">{r.total_points}</td>
-                </tr>
-              ))}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-sm text-zinc-500">
-                    No scores yet — points appear once matches are played.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-3 py-10 text-center text-sm text-slate-400">
+                  No scores yet — points appear once matches are played.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </main>
   )
