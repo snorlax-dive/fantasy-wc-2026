@@ -46,6 +46,18 @@ export default async function Home() {
           >
             Make predictions →
           </a>
+          <a
+            href="/bracket"
+            className="block rounded-lg border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800"
+          >
+            Fill your bracket →
+          </a>
+          <a
+            href="/leaderboard"
+            className="block rounded-lg border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800"
+          >
+            Leaderboard →
+          </a>
         </div>
 
         <form action="/auth/signout" method="post" className="mt-4">
