@@ -25,7 +25,7 @@ export default async function Home() {
         <p className="text-sm uppercase tracking-widest text-emerald-400">Fantasy World Cup 2026</p>
         <h1 className="mt-2 text-2xl font-semibold">Welcome, {name} ⚽</h1>
         <p className="mt-2 text-sm text-zinc-400">
-          You&apos;re signed in. Predictions and the leaderboard land next.
+          You&apos;re signed in. The leaderboard lands next.
         </p>
         {profile?.is_commissioner && (
           <p className="mt-3 inline-block rounded-full bg-amber-950/50 px-3 py-1 text-xs text-amber-300">
@@ -33,12 +33,20 @@ export default async function Home() {
           </p>
         )}
 
-        <a
-          href="/squad"
-          className="mt-6 block rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
-        >
-          Build your squad →
-        </a>
+        <div className="mt-6 grid gap-2">
+          <a
+            href="/squad"
+            className="block rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
+          >
+            Build your squad →
+          </a>
+          <a
+            href="/predictions"
+            className="block rounded-lg border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800"
+          >
+            Make predictions →
+          </a>
+        </div>
 
         <form action="/auth/signout" method="post" className="mt-4">
           <button
