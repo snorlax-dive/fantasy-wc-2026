@@ -1,0 +1,40 @@
+name: Poll & Score
+
+# Runs the scoring engine on a schedule during the tournament:
+#   1) /api/admin/poll  — ingest newly-finished match results from API-Football
+#   2) /api/admin/score — recompute predictions, fantasy, and bracket points
+#
+# Requires two repo secrets (Settings → Secrets and variables → Actions):
+#   APP_URL      = https://fantasy-wc-2026-six.vercel.app   (no trailing slash)
+#   CRON_SECRET  = (same value as the CRON_SECRET env var in Vercel)
+
+on:
+  schedule:
+    - cron: '*/10 * * * *' # every 10 minutes (UTC). GitHub may delay runs under load.
+  workflow_dispatch: {} # lets you trigger it manually from the Actions tab
+
+# Don't pile up overlapping runs.
+concurrency:
+  group: poll-and-score
+  cancel-in-progress: false
+
+jobs:
+  poll-and-score:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ingest results, then recompute scores
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APP_URL:-}" ] || [ -z "${CRON_SECRET:-}" ]; then
+            echo "Missing APP_URL or CRON_SECRET repo secret." >&2
+            exit 1
+          fi
+          echo "→ poll"
+          curl -fsS -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/admin/poll?limit=24"
+          echo
+          echo "→ score"
+          curl -fsS -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/admin/score"
+          echo

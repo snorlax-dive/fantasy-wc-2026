@@ -47,17 +47,24 @@ export async function GET(req: Request) {
       })
     }
 
-    const { data: ourFx } = await db.from('fixtures').select('id, api_fixture_id')
-    const fxByApi = new Map<number, number>((ourFx ?? []).map((r: any) => [r.api_fixture_id, r.id]))
+    const force = url.searchParams.get('force') === '1'
+    const { data: ourFx } = await db.from('fixtures').select('id, api_fixture_id, finished')
+    const fxByApi = new Map<number, any>((ourFx ?? []).map((r: any) => [r.api_fixture_id, r]))
     const { data: ourPlayers } = await db.from('players').select('id, api_player_id, position')
     const plByApi = new Map<number, any>((ourPlayers ?? []).map((r: any) => [r.api_player_id, r]))
 
-    const batch = finished.slice(0, limit)
+    // Only ingest matches finished in the API but not yet finished in our DB, so a
+    // frequent cron stays cheap. `force=1` reprocesses all finished fixtures (corrections).
+    const pending = finished.filter((f) => {
+      const o = fxByApi.get(f.fixture.id)
+      return o && (force || !o.finished)
+    })
+    const batch = pending.slice(0, limit)
     let fixturesWritten = 0
     let statsWritten = 0
 
     for (const f of batch) {
-      const ourFixtureId = fxByApi.get(f.fixture.id)
+      const ourFixtureId = fxByApi.get(f.fixture.id)?.id
       if (!ourFixtureId) continue
 
       const gh = f.goals?.home ?? 0
@@ -118,6 +125,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       ok: true,
       finishedTotal: finished.length,
+      pending: pending.length,
       processed: batch.length,
       fixturesWritten,
       statsWritten,
