@@ -15,22 +15,24 @@ export async function saveSquad(input: {
   } = await supabase.auth.getUser()
   if (!user) return { error: 'You are not signed in.' }
 
-  // Lock check: no edits once the first match has kicked off.
-  const { data: firstFx } = await supabase
-    .from('fixtures')
-    .select('kickoff')
-    .order('kickoff', { ascending: true })
-    .limit(1)
-    .maybeSingle()
-  if (firstFx && new Date(firstFx.kickoff) <= new Date()) {
-    return { error: 'Squads are locked — the tournament has started.' }
-  }
-
-  // Authoritative settings.
+  // Authoritative settings + the current round (re-draft target).
   const { data: settingsRows } = await supabase.from('settings').select('key, value')
   const settings = Object.fromEntries((settingsRows ?? []).map((r) => [r.key, r.value]))
   const budgetCap = Number(settings['budget_cap'] ?? 100)
   const formation = (settings['formation'] ?? { GK: 1, DEF: 4, MID: 3, FWD: 3 }) as Record<Pos, number>
+  const stage = (settings['current_stage'] as string) ?? 'GROUP'
+
+  // Lock check: no edits once this round's first match has kicked off.
+  const { data: firstFx } = await supabase
+    .from('fixtures')
+    .select('kickoff')
+    .eq('stage', stage)
+    .order('kickoff', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (firstFx && new Date(firstFx.kickoff) <= new Date()) {
+    return { error: 'Squads are locked for this round.' }
+  }
 
   const ids = [...new Set(input.playerIds)]
   if (ids.length !== 11) return { error: 'Pick exactly 11 players.' }
@@ -66,7 +68,7 @@ export async function saveSquad(input: {
   // Upsert the squad row, then replace its players.
   const { data: squad, error: sErr } = await supabase
     .from('squads')
-    .upsert({ user_id: user.id, stage: 'GROUP', budget_used: spend }, { onConflict: 'user_id,stage' })
+    .upsert({ user_id: user.id, stage, budget_used: spend }, { onConflict: 'user_id,stage' })
     .select('id')
     .single()
   if (sErr || !squad) return { error: sErr?.message ?? 'Could not save squad.' }

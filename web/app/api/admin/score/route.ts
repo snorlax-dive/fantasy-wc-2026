@@ -38,11 +38,17 @@ export async function GET(req: Request) {
   const db = createAdminClient()
 
   try {
-    const [{ data: players }, { data: stats }, { data: fixtures }] = await Promise.all([
-      db.from('players').select('id, position'),
-      db.from('player_match_stats').select('*'),
-      db.from('fixtures').select('id, stage, score_a, score_b, had_red_card, finished, team_a, team_b'),
-    ])
+    const [{ data: players }, { data: stats }, { data: fixtures }, { data: settingsRows }] =
+      await Promise.all([
+        db.from('players').select('id, position'),
+        db.from('player_match_stats').select('*'),
+        db
+          .from('fixtures')
+          .select('id, stage, score_a, score_b, had_red_card, finished, team_a, team_b, lock_time'),
+        db.from('settings').select('key, value'),
+      ])
+    const settings = Object.fromEntries((settingsRows ?? []).map((r: any) => [r.key, r.value]))
+    const perTargetCap = Number(settings['block_per_target_cap'] ?? 2)
     const posById = new Map<number, Pos>((players ?? []).map((p: any) => [p.id, p.position]))
     const allStats = stats ?? []
     const allFixtures = fixtures ?? []
@@ -94,7 +100,40 @@ export async function GET(req: Request) {
     }
     if (predUpdates.length) await chunkedUpsert(db, 'predictions', predUpdates, 'id')
 
-    // --- 3. squads (captain x2 + differential bonus, per stage) ---
+    // --- reveal blocks for locked stages, then load active blocks + shields ---
+    const now = Date.now()
+    const stageLock = new Map<string, number>()
+    for (const f of allFixtures) {
+      const t = new Date(f.lock_time).getTime()
+      const cur = stageLock.get(f.stage)
+      if (cur == null || t < cur) stageLock.set(f.stage, t)
+    }
+    const lockedStages = [...stageLock.entries()].filter(([, t]) => t <= now).map(([s]) => s)
+    if (lockedStages.length) {
+      await db.from('blocks').update({ revealed: true }).in('stage', lockedStages).eq('revealed', false)
+    }
+    const { data: blocks } = await db
+      .from('blocks')
+      .select('stage, target, player_id, committed_at')
+      .eq('revealed', true)
+    const { data: shields } = await db.from('shield_uses').select('user_id, stage')
+    const shieldSet = new Set<string>((shields ?? []).map((s: any) => `${s.user_id}:${s.stage}`))
+    const blocksByTarget = new Map<string, { player_id: number; committed_at: string }[]>()
+    for (const b of blocks ?? []) {
+      const k = `${b.target}:${b.stage}`
+      if (!blocksByTarget.has(k)) blocksByTarget.set(k, [])
+      blocksByTarget.get(k)!.push({ player_id: b.player_id, committed_at: b.committed_at })
+    }
+    const blockedFor = (userId: string, stage: string): Set<number> => {
+      if (shieldSet.has(`${userId}:${stage}`)) return new Set() // shield = full protection this round
+      const arr = (blocksByTarget.get(`${userId}:${stage}`) ?? [])
+        .slice()
+        .sort((a, b) => a.committed_at.localeCompare(b.committed_at))
+        .slice(0, perTargetCap) // only the first N blocks land; extras bounce
+      return new Set(arr.map((x) => x.player_id))
+    }
+
+    // --- 3. squads (captain x2 + differential bonus + blocks, per stage) ---
     const { data: squads } = await db.from('squads').select('id, user_id, stage, budget_used')
     const { data: sps } = await db.from('squad_players').select('squad_id, player_id, is_captain')
     const playersBySquad = new Map<string, { player_id: number; is_captain: boolean }[]>()
@@ -116,8 +155,10 @@ export async function GET(req: Request) {
           ownership.set(sp.player_id, (ownership.get(sp.player_id) ?? 0) + 1)
       const n = stageSquads.length || 1
       for (const sq of stageSquads) {
+        const blocked = blockedFor(sq.user_id, stage)
         let total = 0
         for (const sp of playersBySquad.get(sq.id) ?? []) {
+          if (blocked.has(sp.player_id)) continue // blocked → 0 (incl. captain & differential)
           const t = stageTotals.get(totalsKey(sp.player_id, stage)) ?? { fantasy: 0, goals: 0 }
           total += t.fantasy
           if (sp.is_captain) total += t.fantasy

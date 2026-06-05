@@ -17,12 +17,14 @@ export function SquadBuilder({
   formation,
   initialPicks,
   locked,
+  stageLabel,
 }: {
   players: Player[]
   budgetCap: number
   formation: Formation
   initialPicks: { player_id: number; is_captain: boolean }[]
   locked: boolean
+  stageLabel?: string
 }) {
   const byId = useMemo(() => new Map(players.map((p) => [p.id, p])), [players])
   const [selected, setSelected] = useState<number[]>(initialPicks.map((p) => p.player_id))
@@ -87,7 +89,10 @@ export function SquadBuilder({
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="mx-auto max-w-5xl px-4 py-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold">Build your squad</h1>
+          <div>
+            <h1 className="text-xl font-semibold">Build your squad</h1>
+            {stageLabel && <p className="text-xs text-emerald-400">{stageLabel}</p>}
+          </div>
           <Link href="/" className="text-sm text-zinc-400 hover:text-zinc-200">
             ← Home
           </Link>
