@@ -20,7 +20,7 @@ export default async function PlayersPage() {
   const stage = (settings['current_stage'] as string) ?? 'GROUP'
 
   const players = await fetchAll((from, to) =>
-    admin.from('players').select('id, name, position, price, team_id, active').range(from, to)
+    admin.from('players').select('id, name, position, price, expected_points, team_id, active').range(from, to)
   )
   const { data: teams } = await admin.from('teams').select('id, name')
   const teamName = new Map<number, string>((teams ?? []).map((t: any) => [t.id, t.name]))
@@ -51,6 +51,7 @@ export default async function PlayersPage() {
       name: p.name,
       pos: p.position,
       price: Number(p.price),
+      xpts: Number(p.expected_points ?? 0),
       nation: teamName.get(p.team_id) ?? '—',
       owned: ownCount.get(p.id) ?? 0,
       pts: ptsBy.get(p.id) ?? 0,

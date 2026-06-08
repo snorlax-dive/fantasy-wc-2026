@@ -85,9 +85,14 @@ export async function savePlayerStat(input: StatInput): Promise<{ ok?: boolean; 
     goals: input.goals,
     own_goals: existing?.own_goals ?? 0,
     red_card: input.redCard,
+    yellow_card: existing?.yellow_card ?? false,
     pens_saved: existing?.pens_saved ?? 0,
     pens_missed: existing?.pens_missed ?? 0,
     clean_sheet: input.cleanSheet,
+    assists: existing?.assists ?? 0,
+    saves: existing?.saves ?? 0,
+    tackles: existing?.tackles ?? 0,
+    interceptions: existing?.interceptions ?? 0,
     fantasy_points: existing?.fantasy_points ?? 0, // recompute (score?force=1) fixes points
   }
   const { error } = await supabase.from('player_match_stats').upsert(row, { onConflict: 'fixture_id,player_id' })

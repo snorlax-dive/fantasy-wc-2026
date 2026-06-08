@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { apiFootball, WORLD_CUP_LEAGUE, SEASON } from '@/lib/apiFootball'
-import { teamStrength } from '@/lib/teamStrength'
+import { teamRatings } from '@/lib/teamStrength'
+import { projectedPointsPerMatch, projectedPoints, priceFromExpectedPoints } from '@/lib/projection'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -46,19 +47,23 @@ function mapStage(round: string): 'GROUP' | 'R32' | 'R16' | 'QF' | 'SF' | 'FINAL
   return 'FINAL' // final + third-place
 }
 
-// FPL-inspired pricing with a SKEWED spread: most players are cheap "enablers"
-// (€4.0–6), a minority are premiums (€10–13.5). Strong teams get pricier stars.
-// The skew (h^1.7) is the key — without it prices cluster and there are no cheap
-// options to balance a premium. Deterministic (stable across re-seeds).
-const PRICE_FLOOR: Record<Pos, number> = { GK: 4.0, DEF: 4.0, MID: 4.5, FWD: 4.5 }
-const PRICE_STR: Record<Pos, number> = { GK: 1.8, DEF: 3.0, MID: 6.5, FWD: 8.5 }
-const PRICE_JIT: Record<Pos, number> = { GK: 0.5, DEF: 1.0, MID: 2.0, FWD: 2.5 }
-function priceFor(pos: Pos, strength: number, apiPlayerId: number): number {
+// Estimates "probability of starting / playing 60+ minutes" from the squad-list
+// shirt number (lower numbers skew toward first-choice players at a World Cup)
+// blended with a stable per-player hash for within-squad differentiation.
+// 70/30 weight: shirt number is the stronger signal; hash provides individual noise.
+function startProbFor(apiPlayerId: number, shirtNumber: number | null | undefined): number {
   const h = (((apiPlayerId * 2654435761) >>> 0) % 1000) / 1000 // deterministic 0..1
-  const skew = Math.pow(h, 1.7) // bias toward the floor → lots of cheap players
-  const raw = PRICE_FLOOR[pos] + (PRICE_STR[pos] * strength + PRICE_JIT[pos]) * skew
-  return Math.min(13.5, Math.max(4.0, Math.round(raw * 2) / 2)) // clamp + nearest 0.5
+  const ns = shirtNumber && shirtNumber >= 1 ? Math.max(0, Math.min(1, (27 - shirtNumber) / 26)) : 0.5
+  return 0.15 + 0.75 * (0.7 * ns + 0.3 * h)
 }
+
+// Attacking vs defensive mid inference from shirt number (no API sub-type available).
+// Shirts 8-11: typically AMs / box-to-box / wingers — higher goal/assist projection.
+// All others: holding/utility mids — lower goal projection, more defensive role.
+function inferMidRole(shirt: number | null | undefined): 'ATK' | 'DEF' {
+  return shirt != null && shirt >= 8 && shirt <= 11 ? 'ATK' : 'DEF'
+}
+
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export async function GET(req: Request) {
@@ -159,20 +164,48 @@ export async function GET(req: Request) {
         })
       }
 
+      // Build team id → name map so we can resolve opponent names from fixture rows.
+      const teamNameById = new Map<number, string>((all).map((t: any) => [t.id, t.name]))
+
       const slice = all.slice(offset, offset + limit)
       let inserted = 0
       for (const t of slice) {
         const squad = await apiFootball<any>('/players/squads', { team: t.api_team_id })
         const players = squad?.[0]?.players ?? []
-        const strength = teamStrength(t.name)
+        const { attack, defense } = teamRatings(t.name)
+
+        // Load this team's GROUP fixtures to compute opponent-adjusted projections.
+        // Falls back to a flat 3-match projection if fixtures aren't seeded yet.
+        const { data: groupFx } = await db
+          .from('fixtures')
+          .select('team_a, team_b')
+          .eq('stage', 'GROUP')
+          .or(`team_a.eq.${t.id},team_b.eq.${t.id}`)
+
         const rows = players.map((p: any) => {
           const pos = mapPosition(p.position)
+          const startProb = startProbFor(p.id, p.number)
+          const midRole = pos === 'MID' ? inferMidRole(p.number) : undefined
+
+          let xPts: number
+          if ((groupFx ?? []).length === 3) {
+            // Sum per-fixture projections using each opponent's actual attack rating.
+            xPts = (groupFx ?? []).reduce((sum: number, fx: any) => {
+              const oppId = fx.team_a === t.id ? fx.team_b : fx.team_a
+              const { attack: oppAtk } = teamRatings(teamNameById.get(oppId) ?? '')
+              return sum + projectedPointsPerMatch({ pos, attack, defense, startProb, midRole, opponentAttack: oppAtk, matchesExpected: 1 })
+            }, 0)
+          } else {
+            xPts = projectedPoints({ pos, attack, defense, startProb, midRole, matchesExpected: 3 })
+          }
+
           return {
             api_player_id: p.id,
             team_id: t.id,
             name: p.name,
             position: pos,
-            price: priceFor(pos, strength, p.id),
+            price: priceFromExpectedPoints(pos, xPts / 3),
+            expected_points: Math.round(xPts * 100) / 100,
             photo_url: p.photo ?? null,
             active: true,
           }
@@ -201,7 +234,148 @@ export async function GET(req: Request) {
       })
     }
 
-    return NextResponse.json({ error: `unknown step '${step}' (use base or players)` }, { status: 400 })
+    // ---------- STEP: qualifiers (refine startProb + prices from real qualifier minutes) ----------
+    if (step === 'qualifiers') {
+      // Optional: filter statistics to specific qualifier league IDs (e.g. "29,30,32,33,34").
+      // When omitted, all national-team competition stats for the season are summed —
+      // this is safe because a national-team API id only returns national-team competitions.
+      const leagueFilter = (url.searchParams.get('leagues') ?? '')
+        .split(',').map(Number).filter(Boolean)
+
+      const { data: dbTeams, error: teamsErr } = await db
+        .from('teams').select('id, api_team_id, name').order('id')
+      if (teamsErr) throw teamsErr
+      const all = dbTeams ?? []
+
+      if (dry) {
+        return NextResponse.json({
+          dry: true,
+          step,
+          totalTeams: all.length,
+          leagueFilter: leagueFilter.length ? leagueFilter : 'all (no filter)',
+          note: 'Run step=players first, then qualifiers to refine prices using real minutes data.',
+        })
+      }
+
+      const teamNameById = new Map<number, string>(all.map((t: any) => [t.id, t.name]))
+      const slice = all.slice(offset, offset + limit)
+
+      // Pre-load GROUP fixtures for opponent-adjusted projection (same logic as step=players).
+      const { data: allGroupFx } = await db.from('fixtures').select('team_a, team_b').eq('stage', 'GROUP')
+      const groupFxByTeam = new Map<number, any[]>()
+      for (const fx of allGroupFx ?? []) {
+        for (const tid of [fx.team_a, fx.team_b].filter(Boolean)) {
+          if (!groupFxByTeam.has(tid)) groupFxByTeam.set(tid, [])
+          groupFxByTeam.get(tid)!.push(fx)
+        }
+      }
+
+      let updated = 0
+      const preview: any[] = []
+
+      for (const t of slice) {
+        // Fetch all pages of /players for this national team.
+        // WC squads are ≤26 players, so at most 2 pages (API paginates at 20).
+        const allEntries: any[] = []
+        for (let page = 1; page <= 3; page++) {
+          const batch = await apiFootball<any>('/players', { team: t.api_team_id, season, page })
+          allEntries.push(...batch)
+          if (batch.length < 20) break
+        }
+        if (!allEntries.length) continue
+
+        const { attack, defense } = teamRatings(t.name)
+        const groupFx = groupFxByTeam.get(t.id) ?? []
+
+        // Load existing players for this team to cross-reference api_player_id → internal id + position.
+        const { data: teamPlayers } = await db
+          .from('players').select('id, api_player_id, position').eq('team_id', t.id)
+        const playerMap = new Map<number, { id: number; pos: Pos }>(
+          (teamPlayers ?? []).map((p: any) => [p.api_player_id, { id: p.id, pos: p.position as Pos }])
+        )
+
+        const playerUpdates: any[] = []
+
+        for (const entry of allEntries) {
+          const apiId = entry.player?.id
+          if (!apiId) continue
+          const our = playerMap.get(apiId)
+          if (!our) continue
+
+          // Optionally restrict to specific qualifier leagues; otherwise sum all competitions.
+          const stats: any[] = leagueFilter.length
+            ? (entry.statistics ?? []).filter((s: any) => leagueFilter.includes(s.league?.id))
+            : (entry.statistics ?? [])
+
+          let totalMinutes = 0
+          let totalAppearances = 0
+          for (const s of stats) {
+            totalMinutes += s.games?.minutes ?? 0
+            totalAppearances += s.games?.appearences ?? 0
+          }
+          if (totalAppearances <= 0) continue
+
+          // startProb = fraction of possible minutes actually played, clamped to a sensible range.
+          const startProb = Math.min(0.97, Math.max(0.10, totalMinutes / (totalAppearances * 90)))
+          const { pos } = our
+          const midRole = pos === 'MID' ? ((apiId % 3) === 0 ? 'ATK' as const : 'DEF' as const) : undefined
+
+          let xPts: number
+          if (groupFx.length === 3) {
+            xPts = (groupFx as any[]).reduce((sum: number, fx: any) => {
+              const oppId = fx.team_a === t.id ? fx.team_b : fx.team_a
+              const { attack: oppAtk } = teamRatings(teamNameById.get(oppId) ?? '')
+              return sum + projectedPointsPerMatch({
+                pos, attack, defense, startProb, midRole, opponentAttack: oppAtk, matchesExpected: 1,
+              })
+            }, 0)
+          } else {
+            xPts = projectedPoints({ pos, attack, defense, startProb, midRole, matchesExpected: 3 })
+          }
+
+          const price = priceFromExpectedPoints(pos, xPts / 3)
+          const expected_points = Math.round(xPts * 100) / 100
+          playerUpdates.push({ id: our.id, start_prob: startProb, price, expected_points })
+
+          if (preview.length < 20) {
+            preview.push({
+              name: entry.player?.name,
+              team: t.name,
+              pos,
+              startProb: `${Math.round(startProb * 100)}%`,
+              totalMinutes,
+              totalAppearances,
+              price,
+              expected_points,
+            })
+          }
+        }
+
+        if (playerUpdates.length) {
+          const { error: upErr } = await db
+            .from('players')
+            .upsert(playerUpdates, { onConflict: 'id' })
+          if (upErr) throw upErr
+          updated += playerUpdates.length
+        }
+      }
+
+      const nextOffset = offset + slice.length
+      return NextResponse.json({
+        ok: true,
+        step,
+        processedTeams: slice.length,
+        updated,
+        nextOffset,
+        done: nextOffset >= all.length,
+        hint: nextOffset >= all.length
+          ? 'All teams processed. Run score to recompute fantasy totals.'
+          : `Call again with &offset=${nextOffset}`,
+        sample: preview,
+      })
+    }
+
+    return NextResponse.json({ error: `unknown step '${step}' (use base, players, or qualifiers)` }, { status: 400 })
   } catch (e: any) {
     return NextResponse.json({ error: String(e?.message ?? e) }, { status: 500 })
   }

@@ -2,10 +2,11 @@
 
 import { useMemo, useState } from 'react'
 
-type P = { id: number; name: string; pos: string; price: number; nation: string; owned: number; pts: number }
+type P = { id: number; name: string; pos: string; price: number; xpts: number; nation: string; owned: number; pts: number }
 const POSITIONS = ['ALL', 'GK', 'DEF', 'MID', 'FWD']
 const SORTS = [
   { key: 'pts', label: 'Points' },
+  { key: 'xpts', label: 'Projected' },
   { key: 'price', label: 'Price' },
   { key: 'owned', label: 'Owned' },
 ] as const
@@ -26,7 +27,15 @@ export function PlayerExplorer({ players, nations, denom }: { players: P[]; nati
         (nation === 'ALL' || p.nation === nation) &&
         (term === '' || p.name.toLowerCase().includes(term))
     )
-    out.sort((a, b) => (sort === 'price' ? b.price - a.price : sort === 'owned' ? b.owned - a.owned : b.pts - a.pts))
+    out.sort((a, b) =>
+      sort === 'price'
+        ? b.price - a.price
+        : sort === 'owned'
+          ? b.owned - a.owned
+          : sort === 'xpts'
+            ? b.xpts - a.xpts
+            : b.pts - a.pts
+    )
     return out
   }, [players, q, pos, nation, sort])
 
@@ -36,7 +45,9 @@ export function PlayerExplorer({ players, nations, denom }: { players: P[]; nati
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-5 pb-24 sm:pb-10">
       <h1 className="text-xl font-extrabold text-cro-navy">Players</h1>
-      <p className="mt-1 text-sm text-slate-500">Compare price, ownership and points to plan your next squad.</p>
+      <p className="mt-1 text-sm text-slate-500">
+        Compare price, projected points (for the upcoming stage), ownership and realized points to plan your next squad.
+      </p>
 
       <input
         value={q}
@@ -87,6 +98,7 @@ export function PlayerExplorer({ players, nations, denom }: { players: P[]; nati
             <tr>
               <th className="px-3 py-2 text-left">Player</th>
               <th className="px-2 py-2 text-right">€</th>
+              <th className="px-2 py-2 text-right">Proj.</th>
               <th className="px-2 py-2 text-right">Own</th>
               <th className="px-3 py-2 text-right">Pts</th>
             </tr>
@@ -101,6 +113,7 @@ export function PlayerExplorer({ players, nations, denom }: { players: P[]; nati
                   </div>
                 </td>
                 <td className="px-2 py-2 text-right tabular-nums text-slate-600">{p.price.toFixed(1)}</td>
+                <td className="px-2 py-2 text-right tabular-nums text-slate-400">{p.xpts.toFixed(1)}</td>
                 <td className="px-2 py-2 text-right tabular-nums text-slate-500">
                   {denom > 0 ? `${pct(p.owned)}%` : '—'}
                 </td>
@@ -109,7 +122,7 @@ export function PlayerExplorer({ players, nations, denom }: { players: P[]; nati
             ))}
             {shown.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-3 py-10 text-center text-sm text-slate-400">
+                <td colSpan={5} className="px-3 py-10 text-center text-sm text-slate-400">
                   No players match your filters.
                 </td>
               </tr>

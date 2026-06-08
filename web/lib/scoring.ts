@@ -2,16 +2,21 @@
 
 export type Pos = 'GK' | 'DEF' | 'MID' | 'FWD'
 
-const GOAL_PTS: Record<Pos, number> = { GK: 6, DEF: 6, MID: 5, FWD: 4 }
+export const GOAL_PTS: Record<Pos, number> = { GK: 6, DEF: 6, MID: 5, FWD: 4 }
 
 export type PlayerStat = {
   minutes: number
   goals: number
+  assists: number
   own_goals: number
   red_card: boolean
+  yellow_card: boolean
   pens_saved: number
   pens_missed: number
   clean_sheet: boolean
+  saves: number        // GK saves (distinct from pens_saved)
+  tackles: number
+  interceptions: number
 }
 
 // Fantasy points for one player in one match.
@@ -20,6 +25,7 @@ export function playerFantasyPoints(s: PlayerStat, pos: Pos): number {
   if (s.minutes >= 60) p += 2
   else if (s.minutes >= 1) p += 1
   p += s.goals * GOAL_PTS[pos]
+  p += s.assists * 3
   if (s.clean_sheet && s.minutes >= 60) {
     if (pos === 'GK' || pos === 'DEF') p += 4
     else if (pos === 'MID') p += 1
@@ -27,7 +33,10 @@ export function playerFantasyPoints(s: PlayerStat, pos: Pos): number {
   p += s.pens_saved * 5
   p -= s.pens_missed * 2
   if (s.red_card) p -= 3
+  if (s.yellow_card) p -= 1
   p -= s.own_goals * 2
+  p += Math.floor(s.saves / 3)
+  p += Math.min(2, Math.floor((s.tackles + s.interceptions) / 4))
   return p
 }
 
