@@ -38,3 +38,6 @@ jobs:
           echo "→ score"
           curl -fsS -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/admin/score"
           echo
+          echo "→ notify (lock reminders; idempotent, no-op until ~6h before lock)"
+          curl -fsS -H "Authorization: Bearer $CRON_SECRET" "$APP_URL/api/admin/notify?type=lock-reminder" || echo "notify skipped"
+          echo
