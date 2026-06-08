@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { RelativeTime } from '@/components/countdown'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +22,8 @@ export default async function LeaderboardPage() {
 
   const { data, error } = await supabase.rpc('get_leaderboard')
   const rows = (data ?? []) as Row[]
+  const { data: scoredAt } = await supabase.from('settings').select('value').eq('key', 'last_scored_at').maybeSingle()
+  const lastScored = typeof scoredAt?.value === 'string' ? scoredAt.value : null
   const { data: profs } = await supabase.from('profiles').select('id, team_name, crest, color')
   const idById = new Map(
     (profs ?? []).map((p) => [p.id as string, p as { team_name: string | null; crest: string | null; color: string | null }])
@@ -28,7 +31,14 @@ export default async function LeaderboardPage() {
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-5 pb-24 sm:pb-10">
-      <h1 className="text-xl font-extrabold text-cro-navy">Leaderboard</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-extrabold text-cro-navy">Leaderboard</h1>
+        {lastScored && (
+          <span className="text-xs text-slate-400">
+            Updated <RelativeTime iso={lastScored} />
+          </span>
+        )}
+      </div>
 
       {error && <p className="mt-4 text-sm text-red-600">{error.message}</p>}
 

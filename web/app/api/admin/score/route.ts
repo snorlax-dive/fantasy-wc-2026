@@ -229,6 +229,9 @@ export async function GET(req: Request) {
     }
     if (bracketUpdates.length) await chunkedUpsert(db, 'bracket_picks', bracketUpdates, 'id')
 
+    // Scoring health: record when scoring last completed successfully.
+    await db.from('settings').upsert({ key: 'last_scored_at', value: new Date().toISOString() }, { onConflict: 'key' })
+
     return NextResponse.json({
       ok: true,
       predsScored: predUpdates.length,

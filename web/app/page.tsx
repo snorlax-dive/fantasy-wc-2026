@@ -20,6 +20,7 @@ const TILES = [
   { href: '/bracket', title: 'Bracket', emoji: '🗺️' },
   { href: '/leaderboard', title: 'Table', emoji: '🏆' },
   { href: '/blocks', title: 'Blocks', emoji: '🛡️' },
+  { href: '/squads', title: 'Squads', emoji: '👀' },
   { href: '/profile', title: 'Your club', emoji: '🎽' },
   { href: '/rules', title: 'Rules', emoji: '📖' },
 ]
