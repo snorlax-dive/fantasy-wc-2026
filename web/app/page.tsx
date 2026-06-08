@@ -19,6 +19,7 @@ const TILES = [
   { href: '/predictions', title: 'Predict', emoji: '🎯' },
   { href: '/bracket', title: 'Bracket', emoji: '🗺️' },
   { href: '/leaderboard', title: 'Table', emoji: '🏆' },
+  { href: '/live', title: 'Live', emoji: '🔴' },
   { href: '/blocks', title: 'Blocks', emoji: '🛡️' },
   { href: '/squads', title: 'Squads', emoji: '👀' },
   { href: '/recap', title: 'My round', emoji: '📋' },
@@ -226,15 +227,20 @@ export default async function Home() {
       {/* Live now */}
       {live.length > 0 && (
         <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-red-200">
-          <h2 className="border-b border-red-100 bg-red-50 px-4 py-2 text-sm font-bold text-cro-red">🔴 Live now</h2>
+          <Link href="/live" className="flex items-center justify-between border-b border-red-100 bg-red-50 px-4 py-2 text-sm font-bold text-cro-red">
+            <span>🔴 Live now</span>
+            <span className="text-xs font-semibold">My live points →</span>
+          </Link>
           <ul className="divide-y divide-slate-100">
             {live.map((m) => (
-              <li key={m.id} className="flex items-center gap-2 px-4 py-2 text-sm">
-                <span className="flex-1 truncate text-right font-medium text-cro-navy">{m.home}</span>
-                <span className="rounded bg-cro-navy px-2 py-0.5 text-xs font-extrabold tabular-nums text-white">
-                  {m.a}–{m.b}
-                </span>
-                <span className="flex-1 truncate font-medium text-cro-navy">{m.away}</span>
+              <li key={m.id}>
+                <Link href={`/match/${m.id}`} className="flex items-center gap-2 px-4 py-2 text-sm transition hover:bg-slate-50">
+                  <span className="flex-1 truncate text-right font-medium text-cro-navy">{m.home}</span>
+                  <span className="rounded bg-cro-navy px-2 py-0.5 text-xs font-extrabold tabular-nums text-white">
+                    {m.a}–{m.b}
+                  </span>
+                  <span className="flex-1 truncate font-medium text-cro-navy">{m.away}</span>
+                </Link>
               </li>
             ))}
           </ul>
@@ -247,13 +253,15 @@ export default async function Home() {
           <h2 className="border-b border-slate-100 px-4 py-2 text-sm font-bold text-cro-navy">📅 Next matches</h2>
           <ul className="divide-y divide-slate-100">
             {upcoming.map((m) => (
-              <li key={m.id} className="flex items-center gap-2 px-4 py-2 text-sm">
-                <span className="flex-1 truncate text-right font-medium text-cro-navy">{m.home}</span>
-                <span className="text-xs text-slate-400">v</span>
-                <span className="flex-1 truncate font-medium text-cro-navy">{m.away}</span>
-                <span className="ml-2 shrink-0 text-xs text-slate-400">
-                  <LocalTime iso={m.kickoff} />
-                </span>
+              <li key={m.id}>
+                <Link href={`/match/${m.id}`} className="flex items-center gap-2 px-4 py-2 text-sm transition hover:bg-slate-50">
+                  <span className="flex-1 truncate text-right font-medium text-cro-navy">{m.home}</span>
+                  <span className="text-xs text-slate-400">v</span>
+                  <span className="flex-1 truncate font-medium text-cro-navy">{m.away}</span>
+                  <span className="ml-2 shrink-0 text-xs text-slate-400">
+                    <LocalTime iso={m.kickoff} />
+                  </span>
+                </Link>
               </li>
             ))}
           </ul>
