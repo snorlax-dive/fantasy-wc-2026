@@ -2,6 +2,8 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { saveBracket } from './actions'
+import { Countdown } from '@/components/countdown'
+import { toast } from '@/components/toast'
 
 export type TeamRow = { id: number; name: string; flag: string | null }
 export type PlayerOption = { id: number; name: string; team: string }
@@ -21,12 +23,14 @@ export function BracketBoard({
   initialFurthest,
   initialGoldenBoot,
   locked,
+  lockAt,
 }: {
   teams: TeamRow[]
   players: PlayerOption[]
   initialFurthest: Record<number, number>
   initialGoldenBoot: number | null
   locked: boolean
+  lockAt?: string | null
 }) {
   const [furthest, setFurthest] = useState<Record<number, number>>(initialFurthest)
   const [goldenBoot, setGoldenBoot] = useState<number | null>(initialGoldenBoot)
@@ -84,7 +88,9 @@ export function BracketBoard({
 
   function onSave() {
     start(async () => {
-      setMsg(await saveBracket({ furthest: Object.fromEntries(Object.entries(furthest)), goldenBoot }))
+      const res = await saveBracket({ furthest: Object.fromEntries(Object.entries(furthest)), goldenBoot })
+      setMsg(res)
+      toast(res.ok ? 'Bracket saved ✅' : res.error ?? 'Could not save', res.ok ? 'ok' : 'err')
     })
   }
 
@@ -95,6 +101,11 @@ export function BracketBoard({
         Place each country at the furthest round you think they reach. R16 +1 · QF +2 · SF +4 · Final +8 ·
         Champion +15 · Golden Boot +10.
       </p>
+      {lockAt && !locked && (
+        <div className="mt-2 inline-block rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800 ring-1 ring-amber-200">
+          ⏰ Bracket locks in <Countdown to={lockAt} />
+        </div>
+      )}
 
       {locked && (
         <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">

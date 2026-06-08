@@ -1,7 +1,8 @@
 'use client'
 
-import { useActionState, useState } from 'react'
+import { useActionState, useEffect, useState } from 'react'
 import { saveProfile, type ProfileState } from './actions'
+import { toast } from '@/components/toast'
 
 const CRESTS = ['⚽', '🦁', '🐉', '🦅', '🐺', '⚡', '🔥', '👑', '🦈', '🐂', '💀', '🌟', '🐅', '🦊', '🏆', '🚀']
 const COLORS = ['#e4002b', '#0e1c4e', '#1e5bb8', '#1f8c3b', '#f59e0b', '#7c3aed', '#db2777', '#0891b2']
@@ -15,6 +16,11 @@ export function ProfileForm({
   const [crest, setCrest] = useState(initial.crest)
   const [color, setColor] = useState(initial.color)
   const [teamName, setTeamName] = useState(initial.team_name)
+
+  useEffect(() => {
+    if (state.ok) toast('Club saved ✅')
+    else if (state.error) toast(state.error, 'err')
+  }, [state])
 
   return (
     <main className="mx-auto w-full max-w-md px-4 py-5 pb-24 sm:pb-10">

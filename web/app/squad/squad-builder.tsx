@@ -2,6 +2,8 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { saveSquad } from './actions'
+import { Countdown } from '@/components/countdown'
+import { toast } from '@/components/toast'
 
 export type Pos = 'GK' | 'DEF' | 'MID' | 'FWD'
 export type Player = {
@@ -41,6 +43,7 @@ export function SquadBuilder({
   currentStage,
   managerCount,
   tripleCaptainStage,
+  lockAt,
 }: {
   players: Player[]
   budgetCap: number
@@ -50,6 +53,7 @@ export function SquadBuilder({
   currentStage: string
   managerCount: number
   tripleCaptainStage: string | null
+  lockAt?: string | null
 }) {
   const tcUsedElsewhere = !!tripleCaptainStage && tripleCaptainStage !== currentStage
   const byId = useMemo(() => new Map(players.map((p) => [p.id, p])), [players])
@@ -152,14 +156,22 @@ export function SquadBuilder({
     start(async () => {
       const res = await saveSquad({ playerIds: selected, captainId: captain, tripleCaptain })
       setMsg(res)
+      toast(res.ok ? 'Squad saved ✅' : res.error ?? 'Could not save', res.ok ? 'ok' : 'err')
     })
   }
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-5 pb-28 sm:pb-10">
-      <div>
-        <h1 className="text-xl font-extrabold text-cro-navy">Build your squad</h1>
-        {stageLabel && <p className="text-xs font-semibold text-cro-red">{stageLabel}</p>}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-extrabold text-cro-navy">Build your squad</h1>
+          {stageLabel && <p className="text-xs font-semibold text-cro-red">{stageLabel}</p>}
+        </div>
+        {lockAt && !locked && (
+          <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800 ring-1 ring-amber-200">
+            ⏰ Locks in <Countdown to={lockAt} />
+          </span>
+        )}
       </div>
 
       {locked && (
@@ -202,7 +214,7 @@ export function SquadBuilder({
           const here = selectedPlayers.filter((p) => p.position === pos)
           const empties = Math.max(0, formation[pos] - here.length)
           return (
-            <div key={pos} className="flex flex-wrap justify-center gap-3 py-2">
+            <div key={pos} className="flex flex-wrap justify-center gap-2 py-2 sm:gap-3">
               {here.map((p) => (
                 <PitchChip
                   key={p.id}
@@ -431,43 +443,48 @@ function PitchChip({
   onRemove: () => void
 }) {
   return (
-    <div className="relative flex w-16 flex-col items-center">
+    <div className="relative flex w-[68px] flex-col items-center">
       {!locked && (
         <button
           onClick={onRemove}
           title="Remove"
-          className="absolute -right-1 -top-1 z-10 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] font-bold text-slate-500 shadow ring-1 ring-slate-200"
+          className="absolute -right-1 -top-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-white text-[11px] font-bold text-slate-500 shadow ring-1 ring-slate-200 hover:text-red-600"
         >
           ✕
         </button>
       )}
       <button
         onClick={onCaptain}
-        title="Set captain"
-        className={`flex h-9 w-9 items-center justify-center rounded-lg text-xs font-extrabold shadow ${
+        title="Set as captain"
+        className={`relative flex h-11 w-11 items-center justify-center rounded-xl text-sm font-extrabold shadow transition active:scale-95 ${
           isCaptain ? 'bg-cro-navy text-white ring-2 ring-yellow-300' : 'bg-white text-cro-red'
         }`}
       >
-        {isCaptain ? 'C' : p.position}
+        {p.position}
+        {isCaptain && (
+          <span className="absolute -left-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-yellow-300 text-[10px] font-extrabold text-cro-navy shadow">
+            C
+          </span>
+        )}
       </button>
-      <div className="mt-1 w-full truncate rounded bg-white/95 px-1 text-center text-[10px] font-semibold text-cro-navy">
+      <div className="mt-1 w-full truncate rounded bg-white/95 px-1 text-center text-[11px] font-semibold text-cro-navy shadow-sm">
         {surname(p.name)}
       </div>
-      <div className="text-[10px] font-medium text-white">€{p.price.toFixed(1)}</div>
+      <div className="text-[10px] font-bold text-white drop-shadow">€{p.price.toFixed(1)}</div>
     </div>
   )
 }
 
 function EmptyChip({ pos, onClick }: { pos: Pos; onClick?: () => void }) {
   return (
-    <div className="flex w-16 flex-col items-center">
+    <div className="flex w-[68px] flex-col items-center">
       <button
         onClick={onClick}
-        className="flex h-9 w-9 items-center justify-center rounded-lg border-2 border-dashed border-white/70 text-base font-bold text-white transition hover:bg-white/25"
+        className="flex h-11 w-11 items-center justify-center rounded-xl border-2 border-dashed border-white/70 text-lg font-bold text-white transition hover:bg-white/25 active:scale-95"
       >
         +
       </button>
-      <div className="mt-1 text-[10px] font-medium text-white/80">{pos}</div>
+      <div className="mt-1 text-[11px] font-medium text-white/85">{pos}</div>
     </div>
   )
 }

@@ -2,6 +2,8 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { savePrediction } from './actions'
+import { Countdown } from '@/components/countdown'
+import { toast } from '@/components/toast'
 
 export type PlayerLite = { id: number; name: string; position: string }
 export type FixtureRow = {
@@ -110,10 +112,20 @@ export function PredictionsBoard({
       })
       setStatus((prev) => ({ ...prev, [f.id]: { saved: res.ok, error: res.error } }))
       if (res.ok) setSaved((prev) => new Set(prev).add(f.id))
+      toast(res.ok ? 'Prediction saved ✅' : res.error ?? 'Could not save', res.ok ? 'ok' : 'err')
     })
   }
 
   const totalPredicted = saved.size
+  const nextLock = useMemo(() => {
+    const now = Date.now()
+    return (
+      fixtures
+        .map((f) => f.lockTime)
+        .filter((t) => new Date(t).getTime() > now)
+        .sort()[0] ?? null
+    )
+  }, [fixtures])
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-5 pb-24 sm:pb-10">
@@ -127,6 +139,11 @@ export function PredictionsBoard({
         Tap a match for scorers, red card &amp; <span className="font-semibold text-amber-700">Banker</span> (2×).
         Each match locks at kickoff.
       </p>
+      {nextLock && (
+        <div className="mt-2 inline-block rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800 ring-1 ring-amber-200">
+          ⏰ Next match locks in <Countdown to={nextLock} />
+        </div>
+      )}
 
       <div className="mt-4 space-y-4">
         {groups.map(([round, list]) => {

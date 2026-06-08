@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { Countdown, LocalTime } from '@/components/countdown'
 
 export const dynamic = 'force-dynamic'
 
@@ -47,16 +48,43 @@ export default async function Home() {
   const name = profile?.team_name || profile?.display_name || user.email
 
   const admin = createAdminClient()
-  const [{ data: lb }, { data: profs }, { data: squads }, { data: blocks }, { data: topStats }] =
-    await Promise.all([
-      supabase.rpc('get_leaderboard'),
-      admin.from('profiles').select('id, display_name, team_name, crest, color'),
-      admin.from('squads').select('user_id, stage, fantasy_points').gt('fantasy_points', 0),
-      admin.from('blocks').select('blocker, target, player_id, stage').eq('revealed', true).limit(8),
-      admin.from('player_match_stats').select('player_id, fantasy_points').order('fantasy_points', { ascending: false }).limit(6),
-    ])
+  const [
+    { data: lb },
+    { data: profs },
+    { data: squads },
+    { data: blocks },
+    { data: topStats },
+    { data: settingsRows },
+    { data: fixtures },
+    { data: teams },
+  ] = await Promise.all([
+    supabase.rpc('get_leaderboard'),
+    admin.from('profiles').select('id, display_name, team_name, crest, color'),
+    admin.from('squads').select('user_id, stage, fantasy_points').gt('fantasy_points', 0),
+    admin.from('blocks').select('blocker, target, player_id, stage').eq('revealed', true).limit(8),
+    admin.from('player_match_stats').select('player_id, fantasy_points').order('fantasy_points', { ascending: false }).limit(6),
+    admin.from('settings').select('key, value'),
+    admin.from('fixtures').select('id, stage, kickoff, team_a, team_b').order('kickoff', { ascending: true }),
+    admin.from('teams').select('id, name'),
+  ])
 
   const pById = new Map((profs ?? []).map((p: any) => [p.id, p]))
+
+  // Lock countdown (current round) + next matches
+  const settings = Object.fromEntries((settingsRows ?? []).map((r: any) => [r.key, r.value]))
+  const currentStage = (settings['current_stage'] as string) ?? 'GROUP'
+  const teamName = new Map<number, string>((teams ?? []).map((t: any) => [t.id, t.name]))
+  const lockISO = (fixtures ?? []).find((f: any) => f.stage === currentStage)?.kickoff ?? null
+  const nowMs = Date.now()
+  const upcoming = (fixtures ?? [])
+    .filter((f: any) => new Date(f.kickoff).getTime() > nowMs)
+    .slice(0, 5)
+    .map((f: any) => ({
+      id: f.id,
+      kickoff: f.kickoff,
+      home: teamName.get(f.team_a) ?? 'TBD',
+      away: teamName.get(f.team_b) ?? 'TBD',
+    }))
   const standings = (lb ?? []).slice(0, 3) as any[]
 
   // Manager of the Round = top fantasy_points per stage
@@ -96,6 +124,16 @@ export default async function Home() {
         <div className="checker h-1.5 w-full" />
       </section>
 
+      {/* Lock countdown */}
+      {lockISO && new Date(lockISO).getTime() > nowMs && (
+        <div className="mt-4 flex items-center justify-between rounded-2xl bg-cro-navy px-4 py-3 text-white shadow-sm">
+          <span className="text-sm font-semibold">⏰ Squads &amp; predictions lock in</span>
+          <span className="text-base font-extrabold">
+            <Countdown to={lockISO} />
+          </span>
+        </div>
+      )}
+
       {/* Quick links */}
       <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
         {TILES.map((t) => (
@@ -105,6 +143,25 @@ export default async function Home() {
           </Link>
         ))}
       </div>
+
+      {/* Next matches */}
+      {upcoming.length > 0 && (
+        <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+          <h2 className="border-b border-slate-100 px-4 py-2 text-sm font-bold text-cro-navy">📅 Next matches</h2>
+          <ul className="divide-y divide-slate-100">
+            {upcoming.map((m) => (
+              <li key={m.id} className="flex items-center gap-2 px-4 py-2 text-sm">
+                <span className="flex-1 truncate text-right font-medium text-cro-navy">{m.home}</span>
+                <span className="text-xs text-slate-400">v</span>
+                <span className="flex-1 truncate font-medium text-cro-navy">{m.away}</span>
+                <span className="ml-2 shrink-0 text-xs text-slate-400">
+                  <LocalTime iso={m.kickoff} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {!hasBuzz ? (
         <div className="mt-4 rounded-2xl bg-white p-6 text-center text-sm text-slate-500 shadow-sm ring-1 ring-slate-200">

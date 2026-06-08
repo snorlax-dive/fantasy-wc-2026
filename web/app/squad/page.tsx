@@ -119,6 +119,7 @@ export default async function SquadPage() {
       currentStage={stage}
       managerCount={managerCount}
       tripleCaptainStage={tripleCaptainStage}
+      lockAt={firstKickoff ?? null}
     />
   )
 }

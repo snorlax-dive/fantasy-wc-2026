@@ -64,6 +64,7 @@ export default async function BracketPage() {
       initialFurthest={furthest}
       initialGoldenBoot={goldenBoot}
       locked={locked}
+      lockAt={firstFx?.kickoff ?? null}
     />
   )
 }

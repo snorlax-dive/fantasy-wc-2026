@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { saveBlock, setShield } from './actions'
+import { toast } from '@/components/toast'
 
 export type Rival = {
   userId: string
@@ -42,6 +43,7 @@ export function BlocksBoard({
     start(async () => {
       const res = await saveBlock({ targetUserId: targetId || null, playerId: targetId ? playerId : null })
       setMsg(res)
+      toast(res.ok ? 'Block committed 🛡️' : res.error ?? 'Could not save', res.ok ? 'ok' : 'err')
     })
   }
   function clearBlock() {
@@ -55,6 +57,7 @@ export function BlocksBoard({
       const res = await setShield({ use })
       if (res.error) setShieldState(!use)
       setMsg(res)
+      toast(res.ok ? (use ? 'Shield up 🛡️' : 'Shield removed') : res.error ?? 'Error', res.ok ? 'ok' : 'err')
     })
   }
 

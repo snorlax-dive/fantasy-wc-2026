@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { TopProgress } from './top-progress'
+import { Toaster } from './toast'
 
 const NAV = [
   { href: '/squad', label: 'Squad', icon: '⚽' },
@@ -23,6 +24,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
   return (
     <>
       <TopProgress />
+      <Toaster />
       <header className="sticky top-0 z-30 bg-cro-red text-white shadow-md">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
           <Link href="/" className="flex items-center gap-2 text-lg font-extrabold tracking-tight">
