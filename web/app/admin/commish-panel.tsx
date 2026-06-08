@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { setStage } from './actions'
+import { setStage, setTournamentLock } from './actions'
 
 const STAGES = [
   { v: 'GROUP', label: 'Group' },
@@ -14,16 +14,31 @@ const STAGES = [
 
 export function CommishPanel({
   currentStage,
+  tournamentLocked,
   counts,
   fixturesByStage,
 }: {
   currentStage: string
+  tournamentLocked: boolean
   counts: { teams: number; players: number; squads: number }
   fixturesByStage: Record<string, { total: number; finished: number }>
 }) {
   const [stage, setStageLocal] = useState(currentStage)
+  const [locked, setLocked] = useState(tournamentLocked)
   const [pending, start] = useTransition()
   const [log, setLog] = useState<string[]>([])
+
+  function toggleLock() {
+    start(async () => {
+      const res = await setTournamentLock(!locked)
+      if (res.ok) {
+        setLocked(!locked)
+        note(!locked ? '🔒 Game LOCKED — no entries allowed' : '🔓 Game unlocked')
+      } else {
+        note(`❌ ${res.error}`)
+      }
+    })
+  }
 
   function note(s: string) {
     setLog((prev) => [s, ...prev].slice(0, 8))
@@ -71,6 +86,28 @@ export function CommishPanel({
               .map(([s, c]) => `${s} ${c.finished}/${c.total}`)
               .join(' · ')}
       </div>
+
+      {/* Freeze / kill-switch */}
+      <section className={`mt-4 rounded-2xl p-4 shadow-sm ring-1 ${locked ? 'bg-red-50 ring-red-200' : 'bg-white ring-slate-200'}`}>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-cro-navy">{locked ? '🔒 Game is LOCKED' : '🔓 Game is open'}</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Instantly freeze all squads, predictions, brackets &amp; blocks (in addition to the automatic
+              kickoff locks).
+            </p>
+          </div>
+          <button
+            onClick={toggleLock}
+            disabled={pending}
+            className={`shrink-0 rounded-lg px-4 py-2 text-sm font-bold text-white disabled:opacity-50 ${
+              locked ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-cro-red hover:bg-cro-red-dark'
+            }`}
+          >
+            {locked ? 'Unlock' : 'Lock now'}
+          </button>
+        </div>
+      </section>
 
       {/* Round control */}
       <section className="mt-6 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">

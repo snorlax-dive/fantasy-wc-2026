@@ -38,7 +38,8 @@ export default async function BlocksPage() {
     .order('kickoff', { ascending: true })
     .limit(1)
     .maybeSingle()
-  const locked = firstFx ? new Date(firstFx.kickoff) <= new Date() : false
+  const locked =
+    settings['tournament_locked'] === true || (firstFx ? new Date(firstFx.kickoff) <= new Date() : false)
 
   // All squads for this round (admin read, so we can show rivals to target).
   const { data: squads } = await admin.from('squads').select('id, user_id').eq('stage', stage)

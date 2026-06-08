@@ -34,11 +34,13 @@ export function PredictionsBoard({
   playersByTeam,
   existing,
   reveal,
+  globalLock,
 }: {
   fixtures: FixtureRow[]
   playersByTeam: Record<number, PlayerLite[]>
   existing: ExistingPrediction[]
   reveal: Record<number, RevealPick[]>
+  globalLock?: boolean
 }) {
   const existingByFixture = useMemo(() => new Map(existing.map((e) => [e.fixture_id, e])), [existing])
 
@@ -182,6 +184,7 @@ export function PredictionsBoard({
                       onBanker={(c) => setBankerId(c ? f.id : bankerId === f.id ? null : bankerId)}
                       onSave={() => save(f)}
                       reveal={reveal[f.id] ?? []}
+                      globalLock={globalLock}
                     />
                   ))}
                 </ul>
@@ -208,6 +211,7 @@ function MatchRow({
   onBanker,
   onSave,
   reveal,
+  globalLock,
 }: {
   f: FixtureRow
   state: CardState
@@ -222,8 +226,9 @@ function MatchRow({
   onBanker: (checked: boolean) => void
   onSave: () => void
   reveal: RevealPick[]
+  globalLock?: boolean
 }) {
-  const locked = new Date(f.lockTime) <= new Date()
+  const locked = globalLock === true || new Date(f.lockTime) <= new Date()
   const kickoff = new Date(f.kickoff).toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',

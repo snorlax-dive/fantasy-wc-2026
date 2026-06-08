@@ -18,7 +18,8 @@ async function stageContext(admin: any) {
     .order('kickoff', { ascending: true })
     .limit(1)
     .maybeSingle()
-  const locked = fx ? new Date(fx.kickoff) <= new Date() : false
+  const locked =
+    settings['tournament_locked'] === true || (fx ? new Date(fx.kickoff) <= new Date() : false)
   return { stage, shieldsPerUser, locked }
 }
 

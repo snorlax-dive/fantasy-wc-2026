@@ -19,7 +19,7 @@ export default async function PredictionsPage() {
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [{ data: fx }, { data: teams }, { data: preds }] = await Promise.all([
+  const [{ data: fx }, { data: teams }, { data: preds }, { data: tlRow }] = await Promise.all([
     supabase
       .from('fixtures')
       .select('id, round, stage, kickoff, lock_time, team_a, team_b')
@@ -29,7 +29,9 @@ export default async function PredictionsPage() {
       .from('predictions')
       .select('fixture_id, pred_a, pred_b, scorer1, scorer2, red_card_pred, is_banker')
       .eq('user_id', user.id),
+    supabase.from('settings').select('value').eq('key', 'tournament_locked').maybeSingle(),
   ])
+  const globalLock = tlRow?.value === true
   const players = await fetchAll((from, to) =>
     supabase.from('players').select('id, name, team_id, position').eq('active', true).order('name').range(from, to)
   )
@@ -77,5 +79,13 @@ export default async function PredictionsPage() {
     }
   }
 
-  return <PredictionsBoard fixtures={fixtures} playersByTeam={playersByTeam} existing={existing} reveal={reveal} />
+  return (
+    <PredictionsBoard
+      fixtures={fixtures}
+      playersByTeam={playersByTeam}
+      existing={existing}
+      reveal={reveal}
+      globalLock={globalLock}
+    />
+  )
 }

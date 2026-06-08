@@ -21,6 +21,7 @@ export async function saveSquad(input: {
   const settings = Object.fromEntries((settingsRows ?? []).map((r) => [r.key, r.value]))
   const budgetCap = Number(settings['budget_cap'] ?? 100)
   const stage = (settings['current_stage'] as string) ?? 'GROUP'
+  if (settings['tournament_locked'] === true) return { error: 'The game is locked by the commissioner.' }
 
   // Lock check: no edits once this round's first match has kicked off.
   const { data: firstFx } = await supabase

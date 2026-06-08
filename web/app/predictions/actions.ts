@@ -19,6 +19,9 @@ export async function savePrediction(input: {
   } = await supabase.auth.getUser()
   if (!user) return { error: 'You are not signed in.' }
 
+  const { data: tl } = await supabase.from('settings').select('value').eq('key', 'tournament_locked').maybeSingle()
+  if (tl?.value === true) return { error: 'The game is locked by the commissioner.' }
+
   const { data: fixture, error: fErr } = await supabase
     .from('fixtures')
     .select('id, stage, lock_time, team_a, team_b')

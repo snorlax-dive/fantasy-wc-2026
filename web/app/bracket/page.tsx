@@ -20,14 +20,16 @@ export default async function BracketPage() {
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [{ data: teams }, { data: picks }, { data: firstFx }] = await Promise.all([
+  const [{ data: teams }, { data: picks }, { data: firstFx }, { data: settingsRows }] = await Promise.all([
     supabase.from('teams').select('id, name, flag_url').order('name'),
     supabase
       .from('bracket_picks')
       .select('pick_type, team_id, player_id')
       .eq('user_id', user.id),
     supabase.from('fixtures').select('kickoff').order('kickoff', { ascending: true }).limit(1).maybeSingle(),
+    supabase.from('settings').select('key, value'),
   ])
+  const settings = Object.fromEntries((settingsRows ?? []).map((r) => [r.key, r.value]))
   const players = await fetchAll((from, to) =>
     supabase.from('players').select('id, name, team:teams(name)').order('name').range(from, to)
   )
@@ -55,7 +57,8 @@ export default async function BracketPage() {
     if (lvl && tid) furthest[tid] = Math.max(furthest[tid] ?? 0, lvl)
   }
 
-  const locked = firstFx ? new Date(firstFx.kickoff) <= new Date() : false
+  const locked =
+    settings['tournament_locked'] === true || (firstFx ? new Date(firstFx.kickoff) <= new Date() : false)
 
   return (
     <BracketBoard
