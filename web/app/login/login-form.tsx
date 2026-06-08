@@ -48,15 +48,14 @@ export function LoginForm({ initialError }: { initialError?: string }) {
               </div>
               <div>
                 <label htmlFor="invite" className="block text-sm font-semibold text-cro-navy">
-                  Invite code
+                  Invite code <span className="font-normal text-slate-400">— first time only</span>
                 </label>
                 <input
                   id="invite"
                   name="invite"
                   type="text"
-                  required
                   className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-cro-red focus:ring-2 focus:ring-cro-red/20"
-                  placeholder="league code"
+                  placeholder="leave blank if returning"
                 />
               </div>
 
