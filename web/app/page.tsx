@@ -21,6 +21,7 @@ const TILES = [
   { href: '/leaderboard', title: 'Table', emoji: '🏆' },
   { href: '/blocks', title: 'Blocks', emoji: '🛡️' },
   { href: '/squads', title: 'Squads', emoji: '👀' },
+  { href: '/recap', title: 'My round', emoji: '📋' },
   { href: '/profile', title: 'Your club', emoji: '🎽' },
   { href: '/rules', title: 'Rules', emoji: '📖' },
 ]

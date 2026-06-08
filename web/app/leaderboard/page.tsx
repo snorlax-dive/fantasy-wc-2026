@@ -1,9 +1,11 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { RelativeTime } from '@/components/countdown'
 
 export const dynamic = 'force-dynamic'
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 type Row = {
   user_id: string
   display_name: string
@@ -11,6 +13,13 @@ type Row = {
   fantasy_points: number
   bracket_points: number
   total_points: number
+}
+
+function Move({ delta }: { delta: number | null }) {
+  if (delta === null) return <span className="text-[10px] font-bold text-cro-blue" title="new entry">NEW</span>
+  if (delta > 0) return <span className="text-[11px] font-bold text-emerald-600" title={`up ${delta}`}>▲{delta}</span>
+  if (delta < 0) return <span className="text-[11px] font-bold text-cro-red" title={`down ${-delta}`}>▼{-delta}</span>
+  return <span className="text-[11px] text-slate-300" title="no change">–</span>
 }
 
 export default async function LeaderboardPage() {
@@ -22,12 +31,33 @@ export default async function LeaderboardPage() {
 
   const { data, error } = await supabase.rpc('get_leaderboard')
   const rows = (data ?? []) as Row[]
-  const { data: scoredAt } = await supabase.from('settings').select('value').eq('key', 'last_scored_at').maybeSingle()
-  const lastScored = typeof scoredAt?.value === 'string' ? scoredAt.value : null
+  const { data: settingsRows } = await supabase.from('settings').select('key, value')
+  const settings = Object.fromEntries((settingsRows ?? []).map((r: any) => [r.key, r.value]))
+  const lastScored = typeof settings['last_scored_at'] === 'string' ? settings['last_scored_at'] : null
+  const baseline = (settings['standings_baseline'] as Record<string, number> | undefined) ?? null
   const { data: profs } = await supabase.from('profiles').select('id, team_name, crest, color')
   const idById = new Map(
     (profs ?? []).map((p) => [p.id as string, p as { team_name: string | null; crest: string | null; color: string | null }])
   )
+
+  // --- League banter stats (admin client: aggregate across all managers) ---
+  const admin = createAdminClient()
+  const [{ data: topHaul }, { data: revealedBlocks }] = await Promise.all([
+    admin.from('player_match_stats').select('player_id, fantasy_points').order('fantasy_points', { ascending: false }).limit(1),
+    admin.from('blocks').select('player_id').eq('revealed', true),
+  ])
+  const blockCounts = new Map<number, number>()
+  for (const b of revealedBlocks ?? []) blockCounts.set(b.player_id, (blockCounts.get(b.player_id) ?? 0) + 1)
+  let mostBlocked: { player_id: number; n: number } | null = null
+  for (const [pid, n] of blockCounts) if (!mostBlocked || n > mostBlocked.n) mostBlocked = { player_id: pid, n }
+  const haul = (topHaul ?? [])[0] as { player_id: number; fantasy_points: number } | undefined
+  const statPlayerIds = [...new Set([haul?.player_id, mostBlocked?.player_id].filter((x): x is number => x != null))]
+  const playerNames = new Map<number, string>()
+  if (statPlayerIds.length) {
+    const { data: pl } = await admin.from('players').select('id, name').in('id', statPlayerIds)
+    for (const p of pl ?? []) playerNames.set(p.id as number, p.name as string)
+  }
+  const hasStats = (haul?.fantasy_points ?? 0) > 0 || mostBlocked !== null
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-5 pb-24 sm:pb-10">
@@ -58,7 +88,12 @@ export default async function LeaderboardPage() {
             {rows.map((r, i) => (
               <tr key={r.user_id} className={r.user_id === user.id ? 'bg-red-50' : ''}>
                 <td className="px-3 py-2.5 font-bold text-slate-400">
-                  {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
+                  <div className="flex items-center gap-1.5">
+                    <span>{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}</span>
+                    {baseline && (
+                      <Move delta={baseline[r.user_id] != null ? baseline[r.user_id] - (i + 1) : null} />
+                    )}
+                  </div>
                 </td>
                 <td className="px-3 py-2.5">
                   <div className="flex items-center gap-2">
@@ -97,6 +132,30 @@ export default async function LeaderboardPage() {
           </tbody>
         </table>
       </div>
+
+      {baseline && (
+        <p className="mt-2 text-center text-[11px] text-slate-400">▲▼ shows movement since the last round started</p>
+      )}
+
+      {/* League stats */}
+      {hasStats && (
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          {haul && haul.fantasy_points > 0 && (
+            <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">🔥 Biggest haul</div>
+              <div className="mt-1 truncate font-bold text-cro-navy">{playerNames.get(haul.player_id) ?? 'Player'}</div>
+              <div className="text-sm font-extrabold text-cro-blue">{haul.fantasy_points} pts</div>
+            </div>
+          )}
+          {mostBlocked && (
+            <div className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-200">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">🛡️ Most blocked</div>
+              <div className="mt-1 truncate font-bold text-cro-navy">{playerNames.get(mostBlocked.player_id) ?? 'Player'}</div>
+              <div className="text-sm font-extrabold text-cro-red">{mostBlocked.n}× blocked</div>
+            </div>
+          )}
+        </div>
+      )}
     </main>
   )
 }

@@ -50,5 +50,23 @@ export async function setStage(stage: string): Promise<{ ok?: boolean; error?: s
     .update({ value: stage, updated_at: new Date().toISOString() })
     .eq('key', 'current_stage')
   if (error) return { error: error.message }
+
+  // Snapshot current standings as the baseline for the new round, so the
+  // leaderboard can show ▲▼ movement during the upcoming stage. Best-effort.
+  try {
+    const { data: lb } = await supabase.rpc('get_leaderboard')
+    const baseline: Record<string, number> = {}
+    ;(lb ?? []).forEach((r: { user_id: string }, i: number) => {
+      baseline[r.user_id] = i + 1
+    })
+    await supabase
+      .from('settings')
+      .upsert({ key: 'standings_baseline', value: baseline, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+    await supabase
+      .from('settings')
+      .upsert({ key: 'standings_baseline_stage', value: stage, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+  } catch {
+    /* non-fatal */
+  }
   return { ok: true }
 }
