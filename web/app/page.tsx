@@ -43,7 +43,7 @@ export default async function Home() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('display_name, team_name, is_commissioner')
+    .select('display_name, team_name, crest, color, is_commissioner')
     .eq('id', user.id)
     .maybeSingle()
   const name = profile?.team_name || profile?.display_name || user.email
@@ -100,6 +100,47 @@ export default async function Home() {
     }))
   const standings = (lb ?? []).slice(0, 3) as any[]
 
+  // --- Onboarding: what this manager still needs to do for the current round ---
+  const stageFxIds = (fixtures ?? []).filter((f: any) => f.stage === currentStage).map((f: any) => f.id)
+  const squadSize = Number(settings['squad_size'] ?? 11)
+  const locked = settings['tournament_locked'] === true
+  const lockPassed = lockISO ? new Date(lockISO).getTime() <= nowMs : false
+  const [{ data: mySquad }, { count: myPredCount }, { count: myBracketCount }] = await Promise.all([
+    supabase.from('squads').select('id').eq('user_id', user.id).eq('stage', currentStage).maybeSingle(),
+    supabase
+      .from('predictions')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .in('fixture_id', stageFxIds.length ? stageFxIds : [-1]),
+    supabase.from('bracket_picks').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+  ])
+  let mySquadCount = 0
+  if (mySquad?.id) {
+    const { count } = await supabase
+      .from('squad_players')
+      .select('*', { count: 'exact', head: true })
+      .eq('squad_id', mySquad.id)
+    mySquadCount = count ?? 0
+  }
+  const identityDone = Boolean(profile?.team_name)
+  const squadDone = mySquadCount >= squadSize
+  const predsDone = stageFxIds.length > 0 && (myPredCount ?? 0) >= stageFxIds.length
+  const bracketDone = (myBracketCount ?? 0) > 0
+  const onboarding = [
+    { href: '/profile', label: 'Name your club', done: identityDone, hint: identityDone ? 'done' : 'pick a name, crest & colour' },
+    { href: '/squad', label: 'Build your squad', done: squadDone, hint: squadDone ? `${mySquadCount}/${squadSize}` : `${mySquadCount}/${squadSize} picked` },
+    {
+      href: '/predictions',
+      label: 'Make predictions',
+      done: predsDone,
+      hint: stageFxIds.length ? `${myPredCount ?? 0}/${stageFxIds.length} matches` : 'fixtures not set yet',
+    },
+    { href: '/bracket', label: 'Fill your bracket', done: bracketDone, hint: bracketDone ? 'done' : 'champion & golden boot' },
+  ]
+  const onboardingDone = onboarding.filter((o) => o.done).length
+  // Show until everything's done, and only while the round is still open.
+  const showOnboarding = !locked && !lockPassed && onboardingDone < onboarding.length
+
   // Manager of the Round = top fantasy_points per stage
   const motrByStage = new Map<string, { user_id: string; pts: number }>()
   for (const s of squads ?? []) {
@@ -145,6 +186,30 @@ export default async function Home() {
             <Countdown to={lockISO} />
           </span>
         </div>
+      )}
+
+      {/* Onboarding checklist */}
+      {showOnboarding && (
+        <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-cro-red/30">
+          <h2 className="flex items-center justify-between border-b border-slate-100 bg-red-50 px-4 py-2 text-sm font-bold text-cro-navy">
+            <span>🚀 Get ready for {STAGE_LABEL[currentStage] ?? currentStage}</span>
+            <span className="text-xs font-bold text-cro-red">{onboardingDone}/{onboarding.length} done</span>
+          </h2>
+          <ul className="divide-y divide-slate-100">
+            {onboarding.map((o) => (
+              <li key={o.href}>
+                <Link href={o.href} className="flex items-center gap-3 px-4 py-2.5 text-sm transition hover:bg-slate-50">
+                  <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${o.done ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                    {o.done ? '✓' : ''}
+                  </span>
+                  <span className={`flex-1 font-semibold ${o.done ? 'text-slate-400 line-through' : 'text-cro-navy'}`}>{o.label}</span>
+                  <span className="text-xs text-slate-400">{o.hint}</span>
+                  {!o.done && <span className="text-cro-red">→</span>}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {/* Quick links */}
