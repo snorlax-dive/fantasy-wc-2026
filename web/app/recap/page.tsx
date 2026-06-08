@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { ShareCard } from './share-card'
 
 export const dynamic = 'force-dynamic'
 
@@ -147,9 +148,12 @@ export default async function RecapPage() {
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-5 pb-24 sm:pb-10">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-extrabold text-cro-navy">Your round recap</h1>
-        <span className="rounded-full bg-cro-navy px-3 py-1 text-xs font-bold text-white">{STAGE_LABEL[stage] ?? stage}</span>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-cro-navy px-3 py-1 text-xs font-bold text-white">{STAGE_LABEL[stage] ?? stage}</span>
+          <ShareCard />
+        </div>
       </div>
 
       {/* Headline */}
