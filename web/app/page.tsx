@@ -22,7 +22,10 @@ const TILES = [
   { href: '/live', title: 'Live', emoji: '🔴' },
   { href: '/blocks', title: 'Blocks', emoji: '🛡️' },
   { href: '/squads', title: 'Squads', emoji: '👀' },
+  { href: '/players', title: 'Players', emoji: '🔎' },
   { href: '/recap', title: 'My round', emoji: '📋' },
+  { href: '/season', title: 'Season', emoji: '📈' },
+  { href: '/achievements', title: 'Badges', emoji: '🏅' },
   { href: '/profile', title: 'Your club', emoji: '🎽' },
   { href: '/rules', title: 'Rules', emoji: '📖' },
 ]
