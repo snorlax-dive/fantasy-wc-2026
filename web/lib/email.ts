@@ -24,6 +24,29 @@ function getTransport(): Transport | null {
   return cached
 }
 
+/** Tells you which SMTP vars are present (never their values) + live connection result. */
+export async function verifyEmail(): Promise<{
+  ok: boolean
+  present: { host: boolean; port: boolean; user: boolean; pass: boolean; from: boolean }
+  error?: string
+}> {
+  const present = {
+    host: Boolean(process.env.SMTP_HOST),
+    port: Boolean(process.env.SMTP_PORT),
+    user: Boolean(process.env.SMTP_USER),
+    pass: Boolean(process.env.SMTP_PASS),
+    from: Boolean(process.env.SMTP_FROM),
+  }
+  const t = getTransport()
+  if (!t) return { ok: false, present, error: 'SMTP not configured (need HOST, USER, PASS)' }
+  try {
+    await t.verify()
+    return { ok: true, present }
+  } catch (e) {
+    return { ok: false, present, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
 export async function sendEmail(to: string, subject: string, html: string): Promise<void> {
   const t = getTransport()
   if (!t) throw new Error('SMTP not configured')

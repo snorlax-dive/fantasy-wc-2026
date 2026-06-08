@@ -12,18 +12,22 @@ const STAGES = [
   { v: 'FINAL', label: 'Final' },
 ]
 
+type Check = { label: string; ok: boolean; detail: string; warn?: boolean }
+
 export function CommishPanel({
   currentStage,
   tournamentLocked,
   signupsOpen,
   counts,
   fixturesByStage,
+  readiness = [],
 }: {
   currentStage: string
   tournamentLocked: boolean
   signupsOpen: boolean
   counts: { teams: number; players: number; squads: number }
   fixturesByStage: Record<string, { total: number; finished: number }>
+  readiness?: Check[]
 }) {
   const [stage, setStageLocal] = useState(currentStage)
   const [locked, setLocked] = useState(tournamentLocked)
@@ -84,9 +88,38 @@ export function CommishPanel({
     })
   }
 
+  const blockers = readiness.filter((c) => !c.ok && !c.warn).length
+
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-5 pb-24 sm:pb-10">
       <h1 className="text-xl font-extrabold text-cro-navy">Commissioner panel</h1>
+
+      {/* Launch readiness */}
+      {readiness.length > 0 && (
+        <section
+          className={`mt-4 overflow-hidden rounded-2xl shadow-sm ring-1 ${
+            blockers === 0 ? 'bg-emerald-50 ring-emerald-200' : 'bg-red-50 ring-red-200'
+          }`}
+        >
+          <h2 className="flex items-center justify-between px-4 py-2 text-sm font-bold text-cro-navy">
+            <span>🚦 Launch readiness</span>
+            <span className={blockers === 0 ? 'text-emerald-700' : 'text-cro-red'}>
+              {blockers === 0 ? 'All clear' : `${blockers} blocker${blockers > 1 ? 's' : ''}`}
+            </span>
+          </h2>
+          <ul className="divide-y divide-white/70 bg-white/60">
+            {readiness.map((c) => (
+              <li key={c.label} className="flex items-start gap-2 px-4 py-2 text-sm">
+                <span className="mt-0.5 shrink-0">{c.ok ? '✅' : c.warn ? '⚠️' : '❌'}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold text-cro-navy">{c.label}</div>
+                  <div className="truncate text-xs text-slate-500">{c.detail}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <div className="mt-4 grid grid-cols-3 gap-2 text-center text-sm">
         <Stat label="Teams" value={counts.teams} />

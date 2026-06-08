@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
-import { sendEmail, emailShell, emailConfigured } from '@/lib/email'
+import { sendEmail, emailShell, emailConfigured, verifyEmail } from '@/lib/email'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -63,6 +63,12 @@ export async function GET(req: Request) {
     const settings = Object.fromEntries((settingsRows ?? []).map((r: any) => [r.key, r.value]))
     const stage = (settings['current_stage'] as string) ?? 'GROUP'
     const stageLabel = STAGE_LABEL[stage] ?? stage
+
+    // ---------------- diagnostics (no email sent) ----------------
+    if (type === 'diag') {
+      const v = await verifyEmail()
+      return NextResponse.json({ ok: v.ok, type: 'diag', smtp: v })
+    }
 
     if (!dry && type !== 'dry' && !emailConfigured()) {
       return NextResponse.json({ ok: false, note: 'SMTP not configured', type }, { status: 200 })
