@@ -55,13 +55,22 @@ export async function sendEmail(to: string, subject: string, html: string): Prom
 }
 
 /** Minimal, brand-consistent email shell. No jokes — plain and clear. */
-export function emailShell(title: string, bodyHtml: string, ctaLabel?: string, ctaUrl?: string): string {
+export function emailShell(
+  title: string,
+  bodyHtml: string,
+  ctaLabel?: string,
+  ctaUrl?: string,
+  unsubscribeUrl?: string
+): string {
   const cta =
     ctaLabel && ctaUrl
       ? `<tr><td style="padding:8px 0 4px;">
            <a href="${ctaUrl}" style="display:inline-block;background:#e4002b;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:10px;font-size:15px;">${ctaLabel}</a>
          </td></tr>`
       : ''
+  const unsub = unsubscribeUrl
+    ? ` · <a href="${unsubscribeUrl}" style="color:#94a3b8;text-decoration:underline;">Unsubscribe</a>`
+    : ''
   return `<!doctype html><html><body style="margin:0;background:#eef1f5;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef1f5;padding:24px 0;">
       <tr><td align="center">
@@ -77,7 +86,7 @@ export function emailShell(title: string, bodyHtml: string, ctaLabel?: string, c
             </table>
           </td></tr>
           <tr><td style="padding:14px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;">
-            <span style="font-size:12px;color:#94a3b8;">You're receiving this because you're in the Fantasy World Cup 2026 league.</span>
+            <span style="font-size:12px;color:#94a3b8;">You're receiving this because you're in the Fantasy World Cup 2026 league.${unsub}</span>
           </td></tr>
         </table>
       </td></tr>

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { sendEmail, emailShell, emailConfigured, verifyEmail } from '@/lib/email'
+import { unsubToken } from '@/lib/notifyToken'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -64,6 +65,15 @@ export async function GET(req: Request) {
     const stage = (settings['current_stage'] as string) ?? 'GROUP'
     const stageLabel = STAGE_LABEL[stage] ?? stage
 
+    // Managers who opted out of email (column may not exist before migration 0004).
+    let optedOut = new Set<string>()
+    try {
+      const { data: outs } = await db.from('profiles').select('id').eq('email_opt_out', true)
+      optedOut = new Set((outs ?? []).map((r: any) => r.id))
+    } catch {
+      /* email_opt_out column not present yet — treat as nobody opted out */
+    }
+
     // ---------------- diagnostics (no email sent) ----------------
     if (type === 'diag') {
       const v = await verifyEmail()
@@ -98,21 +108,23 @@ export async function GET(req: Request) {
       const { data: squads } = await db.from('squads').select('user_id').eq('stage', stage)
       const submitted = new Set((squads ?? []).map((s: any) => s.user_id))
       const emails = await listEmails(db)
-      const recipients = [...emails.entries()].filter(([id]) => !submitted.has(id)).map(([, email]) => email)
+      const recipients = [...emails.entries()].filter(([id]) => !submitted.has(id) && !optedOut.has(id))
 
       if (dry)
         return NextResponse.json({ ok: true, type, stage, wouldSend: recipients.length, minsToLock: Math.round((lockMs - now) / 60000) })
 
       const lockLocal = new Date(firstFx.kickoff).toUTCString().replace('GMT', 'UTC')
-      const html = emailShell(
-        `${stageLabel} locks soon`,
-        `<tr><td style="padding-bottom:10px;">Heads up — the <b>${stageLabel}</b> deadline is almost here and you haven't set your squad yet.</td></tr>
-         <tr><td style="padding-bottom:10px;">Once the first match kicks off (<b>${lockLocal}</b>) your squad, predictions and bracket lock for this round.</td></tr>`,
-        'Set my squad',
-        `${site}/squad`
-      )
       let sent = 0
-      for (const to of recipients) {
+      for (const [id, to] of recipients) {
+        const unsubUrl = `${site}/api/unsubscribe?u=${id}&t=${unsubToken(id)}`
+        const html = emailShell(
+          `${stageLabel} locks soon`,
+          `<tr><td style="padding-bottom:10px;">Heads up — the <b>${stageLabel}</b> deadline is almost here and you haven't set your squad yet.</td></tr>
+           <tr><td style="padding-bottom:10px;">Once the first match kicks off (<b>${lockLocal}</b>) your squad, predictions and bracket lock for this round.</td></tr>`,
+          'Set my squad',
+          `${site}/squad`,
+          unsubUrl
+        )
         try {
           await sendEmail(to, `⏰ ${stageLabel} locks soon — set your squad`, html)
           sent += 1
@@ -143,24 +155,21 @@ export async function GET(req: Request) {
              </tr>`
         )
         .join('')
-      const html = emailShell(
-        `Standings update — ${stageLabel}`,
-        `<tr><td style="padding-bottom:12px;">Here's where the league stands right now.</td></tr>
+      const body = `<tr><td style="padding-bottom:12px;">Here's where the league stands right now.</td></tr>
          <tr><td style="padding-bottom:12px;">
            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;font-size:14px;">
              <tr style="background:#f8fafc;"><td style="padding:6px 8px;color:#94a3b8;">#</td><td style="padding:6px 8px;color:#94a3b8;">Manager</td><td style="padding:6px 8px;text-align:right;color:#94a3b8;">Pts</td></tr>
              ${tableRows || '<tr><td colspan="3" style="padding:12px;color:#94a3b8;">No scores yet.</td></tr>'}
            </table>
-         </td></tr>`,
-        'View full leaderboard',
-        `${site}/leaderboard`
-      )
+         </td></tr>`
 
       const emails = await listEmails(db)
-      const recipients = [...emails.values()]
+      const recipients = [...emails.entries()].filter(([id]) => !optedOut.has(id))
       if (dry) return NextResponse.json({ ok: true, type, wouldSend: recipients.length, leaders: top.length })
       let sent = 0
-      for (const to of recipients) {
+      for (const [id, to] of recipients) {
+        const unsubUrl = `${site}/api/unsubscribe?u=${id}&t=${unsubToken(id)}`
+        const html = emailShell(`Standings update — ${stageLabel}`, body, 'View full leaderboard', `${site}/leaderboard`, unsubUrl)
         try {
           await sendEmail(to, `📊 Fantasy WC standings — ${stageLabel}`, html)
           sent += 1

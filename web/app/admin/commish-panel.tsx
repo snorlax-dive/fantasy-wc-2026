@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, useTransition } from 'react'
 import { setStage, setTournamentLock, setSignupsOpen } from './actions'
 
@@ -125,6 +126,15 @@ export function CommishPanel({
         <Stat label="Teams" value={counts.teams} />
         <Stat label="Players" value={counts.players} />
         <Stat label="Squads" value={counts.squads} />
+      </div>
+
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <Link href="/admin/managers" className="rounded-xl bg-white p-3 text-center text-sm font-semibold text-cro-navy shadow-sm ring-1 ring-slate-200 hover:ring-cro-red">
+          👥 Managers
+        </Link>
+        <Link href="/admin/results" className="rounded-xl bg-white p-3 text-center text-sm font-semibold text-cro-navy shadow-sm ring-1 ring-slate-200 hover:ring-cro-red">
+          ✏️ Fix results
+        </Link>
       </div>
       <div className="mt-2 rounded-2xl bg-white p-3 text-xs text-slate-500 shadow-sm ring-1 ring-slate-200">
         Fixtures by stage:{' '}

@@ -59,6 +59,13 @@ export default async function LeaderboardPage() {
   }
   const hasStats = (haul?.fantasy_points ?? 0) > 0 || mostBlocked !== null
 
+  // --- Rival tracker: who's directly above/below you ---
+  const nameOf = (r: Row) => idById.get(r.user_id)?.team_name || r.display_name
+  const myIndex = rows.findIndex((r) => r.user_id === user.id)
+  const me = myIndex >= 0 ? rows[myIndex] : null
+  const above = myIndex > 0 ? rows[myIndex - 1] : null
+  const below = myIndex >= 0 && myIndex < rows.length - 1 ? rows[myIndex + 1] : null
+
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-5 pb-24 sm:pb-10">
       <div className="flex items-center justify-between">
@@ -71,6 +78,36 @@ export default async function LeaderboardPage() {
       </div>
 
       {error && <p className="mt-4 text-sm text-red-600">{error.message}</p>}
+
+      {/* Rival tracker */}
+      {me && rows.length > 1 && (
+        <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-cro-navy/15">
+          <h2 className="border-b border-slate-100 bg-cro-navy px-4 py-2 text-sm font-bold text-white">⚔️ Your race</h2>
+          <div className="divide-y divide-slate-100">
+            {above ? (
+              <div className="flex items-center gap-2 px-4 py-2 text-sm">
+                <span className="w-6 text-center text-slate-400">{myIndex}</span>
+                <span className="flex-1 truncate text-slate-600">{nameOf(above)}</span>
+                <span className="text-xs font-bold text-cro-red">{above.total_points - me.total_points} ahead</span>
+              </div>
+            ) : (
+              <div className="px-4 py-2 text-sm font-semibold text-emerald-600">👑 You&apos;re top of the table</div>
+            )}
+            <div className="flex items-center gap-2 bg-red-50 px-4 py-2.5 text-sm">
+              <span className="w-6 text-center font-bold text-cro-navy">{myIndex + 1}</span>
+              <span className="flex-1 truncate font-extrabold text-cro-navy">{nameOf(me)} <span className="text-xs font-bold text-cro-red">you</span></span>
+              <span className="font-extrabold tabular-nums text-cro-navy">{me.total_points}</span>
+            </div>
+            {below && (
+              <div className="flex items-center gap-2 px-4 py-2 text-sm">
+                <span className="w-6 text-center text-slate-400">{myIndex + 2}</span>
+                <span className="flex-1 truncate text-slate-600">{nameOf(below)}</span>
+                <span className="text-xs font-bold text-emerald-600">{me.total_points - below.total_points} behind</span>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       <div className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
         <table className="w-full text-sm">

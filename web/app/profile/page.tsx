@@ -13,7 +13,7 @@ export default async function ProfilePage() {
 
   const { data: p } = await supabase
     .from('profiles')
-    .select('display_name, team_name, crest, color')
+    .select('display_name, team_name, crest, color, email_opt_out')
     .eq('id', user.id)
     .maybeSingle()
 
@@ -24,6 +24,7 @@ export default async function ProfilePage() {
         team_name: p?.team_name ?? '',
         crest: p?.crest ?? '⚽',
         color: p?.color ?? '#e4002b',
+        email_opt_out: Boolean((p as { email_opt_out?: boolean } | null)?.email_opt_out),
       }}
     />
   )

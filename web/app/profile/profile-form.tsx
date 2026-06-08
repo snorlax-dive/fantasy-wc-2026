@@ -10,12 +10,13 @@ const COLORS = ['#e4002b', '#0e1c4e', '#1e5bb8', '#1f8c3b', '#f59e0b', '#7c3aed'
 export function ProfileForm({
   initial,
 }: {
-  initial: { display_name: string; team_name: string; crest: string; color: string }
+  initial: { display_name: string; team_name: string; crest: string; color: string; email_opt_out: boolean }
 }) {
   const [state, action, pending] = useActionState<ProfileState, FormData>(saveProfile, {})
   const [crest, setCrest] = useState(initial.crest)
   const [color, setColor] = useState(initial.color)
   const [teamName, setTeamName] = useState(initial.team_name)
+  const [emailOptIn, setEmailOptIn] = useState(!initial.email_opt_out)
 
   useEffect(() => {
     if (state.ok) toast('Club saved ✅')
@@ -97,6 +98,22 @@ export function ProfileForm({
               />
             ))}
           </div>
+        </div>
+
+        <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              name="email_optin"
+              checked={emailOptIn}
+              onChange={(e) => setEmailOptIn(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-cro-red"
+            />
+            <span className="text-sm">
+              <span className="font-semibold text-cro-navy">Email me reminders &amp; digests</span>
+              <span className="block text-xs text-slate-400">Lock reminders before each round and the occasional standings update.</span>
+            </span>
+          </label>
         </div>
 
         {state.error && <p className="text-sm text-red-600">{state.error}</p>}
