@@ -254,7 +254,7 @@ export function CommishPanel({
       <section className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
         <h2 className="text-sm font-bold text-cro-navy">Email notifications</h2>
         <p className="mt-1 text-xs text-slate-500">
-          Lock reminders go out automatically ~6h before each round locks (only to managers who haven't set a
+          Lock reminders go out automatically ~6h before each round locks (only to managers who haven&apos;t set a
           squad). Use these to send manually.
         </p>
         <div className="mt-3 grid grid-cols-2 gap-2">

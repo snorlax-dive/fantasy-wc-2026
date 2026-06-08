@@ -47,11 +47,24 @@ export async function verifyEmail(): Promise<{
   }
 }
 
-export async function sendEmail(to: string, subject: string, html: string): Promise<void> {
+export async function sendEmail(
+  to: string,
+  subject: string,
+  html: string,
+  unsubscribeUrl?: string
+): Promise<void> {
   const t = getTransport()
   if (!t) throw new Error('SMTP not configured')
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER || 'noreply@localhost'
-  await t.sendMail({ from, to, subject, html })
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER
+  if (!from) throw new Error('SMTP_FROM (or SMTP_USER as fallback) is not configured')
+  const headers = unsubscribeUrl
+    ? { 'List-Unsubscribe': `<${unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }
+    : undefined
+  await t.sendMail({ from, to, subject, html, headers })
+}
+
+function escHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 }
 
 /** Minimal, brand-consistent email shell. No jokes — plain and clear. */
@@ -79,7 +92,7 @@ export function emailShell(
             <span style="color:#ffffff;font-weight:800;font-size:18px;letter-spacing:.3px;">Fantasy World Cup 2026</span>
           </td></tr>
           <tr><td style="padding:24px;">
-            <h1 style="margin:0 0 12px;font-size:20px;color:#0e1c4e;">${title}</h1>
+            <h1 style="margin:0 0 12px;font-size:20px;color:#0e1c4e;">${escHtml(title)}</h1>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:15px;line-height:1.5;color:#334155;">
               ${bodyHtml}
               ${cta}

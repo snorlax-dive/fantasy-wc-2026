@@ -123,6 +123,9 @@ export async function GET(req: Request) {
       const winnerTeam = winnerApi != null ? teamByApi.get(winnerApi) ?? null : null
 
       const teamsPlayers = await apiFootball<any>('/fixtures/players', { fixture: f.fixture.id })
+      // API-Football occasionally returns an empty array during or just after a match.
+      // Skip rather than overwriting existing stats with zeros.
+      if (!Array.isArray(teamsPlayers) || teamsPlayers.length === 0) continue
       let hadRed = false
       const statRows: any[] = []
 

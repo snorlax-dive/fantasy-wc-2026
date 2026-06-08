@@ -56,7 +56,7 @@ export default async function PredictionsPage() {
   const existing = (preds ?? []) as ExistingPrediction[]
 
   // Reveal: once a match locks, show everyone's picks (cross-user → admin read).
-  const now = Date.now()
+  const now = new Date().getTime()
   const lockedIds = fixtures.filter((f) => new Date(f.lockTime).getTime() <= now).map((f) => f.id)
   const reveal: Record<number, RevealPick[]> = {}
   if (lockedIds.length > 0) {

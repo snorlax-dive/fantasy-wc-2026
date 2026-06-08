@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { RelativeTime } from '@/components/countdown'
 
 export const dynamic = 'force-dynamic'
@@ -40,11 +39,10 @@ export default async function LeaderboardPage() {
     (profs ?? []).map((p) => [p.id as string, p as { team_name: string | null; crest: string | null; color: string | null }])
   )
 
-  // --- League banter stats (admin client: aggregate across all managers) ---
-  const admin = createAdminClient()
+  // --- League banter stats (player_match_stats and revealed blocks are public via RLS) ---
   const [{ data: topHaul }, { data: revealedBlocks }] = await Promise.all([
-    admin.from('player_match_stats').select('player_id, fantasy_points').order('fantasy_points', { ascending: false }).limit(1),
-    admin.from('blocks').select('player_id').eq('revealed', true),
+    supabase.from('player_match_stats').select('player_id, fantasy_points').order('fantasy_points', { ascending: false }).limit(1),
+    supabase.from('blocks').select('player_id').eq('revealed', true),
   ])
   const blockCounts = new Map<number, number>()
   for (const b of revealedBlocks ?? []) blockCounts.set(b.player_id, (blockCounts.get(b.player_id) ?? 0) + 1)
@@ -54,7 +52,7 @@ export default async function LeaderboardPage() {
   const statPlayerIds = [...new Set([haul?.player_id, mostBlocked?.player_id].filter((x): x is number => x != null))]
   const playerNames = new Map<number, string>()
   if (statPlayerIds.length) {
-    const { data: pl } = await admin.from('players').select('id, name').in('id', statPlayerIds)
+    const { data: pl } = await supabase.from('players').select('id, name').in('id', statPlayerIds)
     for (const p of pl ?? []) playerNames.set(p.id as number, p.name as string)
   }
   const hasStats = (haul?.fantasy_points ?? 0) > 0 || mostBlocked !== null

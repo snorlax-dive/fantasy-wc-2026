@@ -25,9 +25,9 @@ export default async function SeasonPage() {
 
   const admin = createAdminClient()
   const [{ data: fixtures }, { data: squads }, { data: profs }, { data: lb }] = await Promise.all([
-    admin.from('fixtures').select('id, stage, finished'),
+    supabase.from('fixtures').select('id, stage, finished'),
     admin.from('squads').select('user_id, stage, fantasy_points'),
-    admin.from('profiles').select('id'),
+    supabase.from('profiles').select('id'),
     supabase.rpc('get_leaderboard'),
   ])
   const preds = await fetchAll((from, to) =>

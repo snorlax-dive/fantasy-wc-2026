@@ -63,10 +63,23 @@ export async function saveBracket(input: {
     rows.push({ user_id: user.id, pick_type: 'GOLDEN_BOOT', player_id: input.goldenBoot, points: 0 })
   }
 
+  // Save existing picks for best-effort rollback if insert fails (no transaction support).
+  const { data: existingPicks } = await supabase
+    .from('bracket_picks')
+    .select('pick_type, team_id, player_id, points')
+    .eq('user_id', user.id)
+
   await supabase.from('bracket_picks').delete().eq('user_id', user.id)
   if (rows.length) {
     const { error } = await supabase.from('bracket_picks').insert(rows)
-    if (error) return { error: error.message }
+    if (error) {
+      if (existingPicks?.length) {
+        await supabase.from('bracket_picks').insert(
+          existingPicks.map((p) => ({ ...p, user_id: user.id }))
+        )
+      }
+      return { error: error.message }
+    }
   }
   return { ok: true }
 }

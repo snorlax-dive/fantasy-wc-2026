@@ -60,11 +60,6 @@ function startProbFor(
   return 0.15 + 0.75 * (0.7 * 0.5 + 0.3 * h)
 }
 
-// Attacking vs defensive mid inference — mirrors seed/route.ts.
-function inferMidRole(shirt: number | null | undefined): 'ATK' | 'DEF' {
-  return shirt != null && shirt >= 8 && shirt <= 11 ? 'ATK' : 'DEF'
-}
-
 // Re-prices every active player ahead of a re-draft, blending each player's
 // pre-tournament projection (lib/projection.ts prior) with the form they've
 // actually shown so far this tournament (player_match_stats), via shrinkage —

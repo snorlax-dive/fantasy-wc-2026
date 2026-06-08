@@ -51,22 +51,37 @@ API-Football  →  /api/admin/{seed,poll,score}  →  Supabase Postgres (RLS)  �
 - `lib/apiFootball.ts` — thin fetch wrapper around API-Football (API-Sports v3), handles RapidAPI vs
   direct-host auth headers and surfaces API-level errors.
 - `app/api/admin/seed/route.ts` — pulls teams/fixtures/players/prices from API-Football into Postgres.
+  Supports `?step=base|players|qualifiers` — see `PRICING.md` for the full seeding sequence.
 - `app/api/admin/poll/route.ts` — polls live/finished fixtures, upserts results + per-player match stats.
 - `app/api/admin/score/route.ts` — recomputes prediction/fantasy/bracket points from stored stats using
   the pure functions in `lib/scoring.ts`, then upserts `points`/`fantasy_points` back onto rows that the
   `get_leaderboard()` Postgres function (in the migration) sums per user.
+- `app/api/admin/reprice/route.ts` — re-prices players before each knockout re-draft window using
+  `lib/projection.ts` (prior blended with in-tournament form via shrinkage). Takes `?stage=R32|R16|QF|SF|FINAL`;
+  add `&dry=1` to preview without writing. Run once per stage before the re-draft window opens.
 - `app/api/admin/notify/route.ts` — sends lock-reminder / reveal emails via `lib/email.ts` (nodemailer/SMTP).
 
-All three `/api/admin/*` route handlers share the same `authorized()` pattern: accept either
+All `/api/admin/*` route handlers share the same `authorized()` pattern: accept either
 `Authorization: Bearer $CRON_SECRET` (for cron/GitHub Actions polling) **or** an authenticated user whose
 `profiles.is_commissioner` is true. Follow this pattern for any new privileged route.
 
-### Scoring engine (`lib/scoring.ts`)
-Pure, side-effect-free functions only — `playerFantasyPoints()`, `scorePrediction()`, plus the
-`BRACKET_POINTS` table and differential-bonus constants. This is the canonical rules implementation
-(ported from and validated against `sim.py`/`wc2022.json`); any rule change should land here first and
-be reflected back into `sim.py` if you re-run simulations. Keep I/O out of this module so it stays easy
-to test/validate against the 2022 reference data.
+### Scoring engine (`lib/scoring.ts`) and pricing model (`lib/projection.ts`)
+`lib/scoring.ts` — pure, side-effect-free functions: `playerFantasyPoints()`, `scorePrediction()`, plus
+`BRACKET_POINTS` table and differential-bonus constants. Canonical rules implementation (ported from
+`sim.py`/`wc2022.json`). Keep I/O out; any rule change lands here first.
+
+`lib/projection.ts` — pure expected-points model that mirrors the component structure of
+`playerFantasyPoints()` so prices are literally derived from the rules. Key exports:
+- `projectedPointsPerMatch(input)` — prior optionally shrunk toward realized form via empirical-Bayes
+  (`w * prior + n * observed / (w + n)`, default `priorWeight=3`)
+- `priceFromExpectedPoints(pos, perMatchPts)` — maps per-match xPts to a £4.0–£13.5 price (power-scaled,
+  nearest £0.5, `PRICE_SKEW=1.6` gives a bottom-heavy distribution)
+- `lib/teamStrength.ts` — hardcoded attack/defense ratings for all 48 WC 2026 qualifiers, consumed by
+  both seed and reprice routes
+
+Defensive actions (tackles, interceptions) and GK saves are intentionally excluded from the pricing
+prior — too volatile to project — but are rewarded in actual scoring as upside surprises. See `PRICING.md`
+for the full commissioner workflow (seed → qualifiers → poll/score → reprice).
 
 ### Database (`web/supabase/migrations/`)
 Hand-written, sequential SQL migrations (`0001_initial_schema.sql` is the big one: tables, enums, RLS
@@ -78,6 +93,13 @@ Core tables: `profiles`, `teams`, `players`, `fixtures`, `player_match_stats`, `
 `squad_players`, `bracket_picks`, `blocks`/`shield_uses`, `settings`. Stage progression is modeled via
 the `stage_bucket` enum (`GROUP, R32, R16, QF, SF, FINAL`) used across squads, blocks, and bracket picks
 to drive the "re-draft every knockout round" mechanic.
+
+`players` has `price`, `expected_points` (per-stage projected total from `lib/projection.ts`), and
+`start_prob` (from qualifier minutes; `NULL` = falls back to shirt-number heuristic).
+
+`player_match_stats` tracks: `minutes`, `goals`, `assists`, `own_goals`, `red_card`, `yellow_card`,
+`pens_saved`, `pens_missed`, `clean_sheet`, `saves`, `tackles`, `interceptions` — all consumed by
+`playerFantasyPoints()` in `lib/scoring.ts`.
 
 **Locking rule:** every per-round/per-match user action (`predictions`, `squads`, `blocks`, ...) is only
 editable until the relevant `kickoff`/`lock_time`. This must be enforced both in the DB (RLS / checks)

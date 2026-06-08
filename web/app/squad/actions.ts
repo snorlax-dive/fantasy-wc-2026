@@ -85,6 +85,12 @@ export async function saveSquad(input: {
     .single()
   if (sErr || !squad) return { error: sErr?.message ?? 'Could not save squad.' }
 
+  // Save existing picks for best-effort rollback if the insert fails (no transaction support).
+  const { data: existingPicks } = await supabase
+    .from('squad_players')
+    .select('player_id, is_captain')
+    .eq('squad_id', squad.id)
+
   await supabase.from('squad_players').delete().eq('squad_id', squad.id)
   const rows = ids.map((id) => ({
     squad_id: squad.id,
@@ -92,7 +98,14 @@ export async function saveSquad(input: {
     is_captain: id === input.captainId,
   }))
   const { error: spErr } = await supabase.from('squad_players').insert(rows)
-  if (spErr) return { error: spErr.message }
+  if (spErr) {
+    if (existingPicks?.length) {
+      await supabase.from('squad_players').insert(
+        existingPicks.map((p) => ({ squad_id: squad.id, player_id: p.player_id, is_captain: p.is_captain }))
+      )
+    }
+    return { error: spErr.message }
+  }
 
   if (input.tripleCaptain) {
     await supabase

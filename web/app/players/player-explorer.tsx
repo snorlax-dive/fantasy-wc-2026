@@ -81,7 +81,7 @@ export function PlayerExplorer({ players, nations, denom }: { players: P[]; nati
         </select>
         <select
           value={sort}
-          onChange={(e) => setSort(e.target.value as any)}
+          onChange={(e) => setSort(e.target.value as (typeof SORTS)[number]['key'])}
           className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-cro-red"
         >
           {SORTS.map((s) => (

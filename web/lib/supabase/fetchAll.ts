@@ -13,7 +13,7 @@ export async function fetchAll<T = any>(
   const out: T[] = []
   for (let from = 0; ; from += chunk) {
     const { data, error } = await makeQuery(from, from + chunk - 1)
-    if (error) throw error
+    if (error) throw new Error(`fetchAll failed at offset ${from}: ${error.message}`)
     const rows = data ?? []
     out.push(...rows)
     if (rows.length < chunk) break

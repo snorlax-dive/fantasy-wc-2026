@@ -59,8 +59,10 @@ export async function GET(req: Request) {
   const db = createAdminClient()
   const site = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || ''
 
+  const supabase = await createClient()
   try {
-    const { data: settingsRows } = await db.from('settings').select('key, value')
+    // Public tables (SELECT using(true)) use the server client; only squads + auth.admin need admin.
+    const { data: settingsRows } = await supabase.from('settings').select('key, value')
     const settings = Object.fromEntries((settingsRows ?? []).map((r: any) => [r.key, r.value]))
     const stage = (settings['current_stage'] as string) ?? 'GROUP'
     const stageLabel = STAGE_LABEL[stage] ?? stage
@@ -68,7 +70,7 @@ export async function GET(req: Request) {
     // Managers who opted out of email (column may not exist before migration 0004).
     let optedOut = new Set<string>()
     try {
-      const { data: outs } = await db.from('profiles').select('id').eq('email_opt_out', true)
+      const { data: outs } = await supabase.from('profiles').select('id').eq('email_opt_out', true)
       optedOut = new Set((outs ?? []).map((r: any) => r.id))
     } catch {
       /* email_opt_out column not present yet — treat as nobody opted out */
@@ -86,7 +88,7 @@ export async function GET(req: Request) {
 
     // ---------------- lock reminder (auto, idempotent per stage) ----------------
     if (type === 'lock-reminder') {
-      const { data: firstFx } = await db
+      const { data: firstFx } = await supabase
         .from('fixtures')
         .select('kickoff')
         .eq('stage', stage)
@@ -102,7 +104,21 @@ export async function GET(req: Request) {
         return NextResponse.json({ ok: true, sent: 0, note: 'not within window', stage, minsToLock: Math.round((lockMs - now) / 60000) })
 
       const flagKey = `reminded_${stage}`
+      // Fast path: flag already in settings snapshot.
       if (settings[flagKey] === true) return NextResponse.json({ ok: true, sent: 0, note: 'already reminded', stage })
+
+      if (!dry) {
+        // Atomically claim the reminder slot before sending any emails. Because settings.key
+        // has a unique constraint, only one concurrent request can insert — the other gets a
+        // 23505 unique-violation and bails out, preventing duplicate sends.
+        const { error: claimErr } = await db.from('settings').insert({ key: flagKey, value: true })
+        if (claimErr) {
+          if (claimErr.code === '23505') {
+            return NextResponse.json({ ok: true, sent: 0, note: 'already reminded (concurrent)', stage })
+          }
+          throw claimErr
+        }
+      }
 
       // Recipients = league members without a saved squad for this stage.
       const { data: squads } = await db.from('squads').select('user_id').eq('stage', stage)
@@ -126,21 +142,21 @@ export async function GET(req: Request) {
           unsubUrl
         )
         try {
-          await sendEmail(to, `⏰ ${stageLabel} locks soon — set your squad`, html)
+          await sendEmail(to, `⏰ ${stageLabel} locks soon — set your squad`, html, unsubUrl)
           sent += 1
         } catch {
           /* skip individual failures */
         }
       }
-      await db.from('settings').upsert({ key: flagKey, value: true }, { onConflict: 'key' })
+      // Flag was already inserted before sending (atomic claim), no upsert needed here.
       return NextResponse.json({ ok: true, type, stage, sent, recipients: recipients.length })
     }
 
     // ---------------- digest (manual, commissioner-triggered) ----------------
     if (type === 'digest') {
-      const { data: lb } = await db.rpc('get_leaderboard')
+      const { data: lb } = await supabase.rpc('get_leaderboard')
       const rows = (lb ?? []) as any[]
-      const { data: profs } = await db.from('profiles').select('id, team_name')
+      const { data: profs } = await supabase.from('profiles').select('id, team_name')
       const teamById = new Map((profs ?? []).map((p: any) => [p.id, p.team_name as string | null]))
 
       const top = rows.slice(0, 10)
@@ -171,7 +187,7 @@ export async function GET(req: Request) {
         const unsubUrl = `${site}/api/unsubscribe?u=${id}&t=${unsubToken(id)}`
         const html = emailShell(`Standings update — ${stageLabel}`, body, 'View full leaderboard', `${site}/leaderboard`, unsubUrl)
         try {
-          await sendEmail(to, `📊 Fantasy WC standings — ${stageLabel}`, html)
+          await sendEmail(to, `📊 Fantasy WC standings — ${stageLabel}`, html, unsubUrl)
           sent += 1
         } catch {
           /* skip */

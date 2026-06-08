@@ -15,17 +15,17 @@ export default async function PlayersPage() {
   if (!user) redirect('/login')
 
   const admin = createAdminClient()
-  const { data: settingsRows } = await admin.from('settings').select('key, value')
+  const { data: settingsRows } = await supabase.from('settings').select('key, value')
   const settings = Object.fromEntries((settingsRows ?? []).map((r: any) => [r.key, r.value]))
   const stage = (settings['current_stage'] as string) ?? 'GROUP'
 
   const players = await fetchAll((from, to) =>
-    admin.from('players').select('id, name, position, price, expected_points, team_id, active').range(from, to)
+    supabase.from('players').select('id, name, position, price, expected_points, team_id, active').range(from, to)
   )
-  const { data: teams } = await admin.from('teams').select('id, name')
+  const { data: teams } = await supabase.from('teams').select('id, name')
   const teamName = new Map<number, string>((teams ?? []).map((t: any) => [t.id, t.name]))
 
-  // Ownership for the current stage
+  // Ownership for the current stage — cross-user read, needs admin
   const { data: squads } = await admin.from('squads').select('id').eq('stage', stage)
   const squadIds = (squads ?? []).map((s: any) => s.id)
   const denom = squadIds.length
@@ -39,7 +39,7 @@ export default async function PlayersPage() {
 
   // Season fantasy points
   const stats = await fetchAll((from, to) =>
-    admin.from('player_match_stats').select('player_id, fantasy_points').range(from, to)
+    supabase.from('player_match_stats').select('player_id, fantasy_points').range(from, to)
   )
   const ptsBy = new Map<number, number>()
   for (const s of stats) ptsBy.set(s.player_id, (ptsBy.get(s.player_id) ?? 0) + s.fantasy_points)

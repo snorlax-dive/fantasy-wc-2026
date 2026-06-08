@@ -25,6 +25,12 @@ export async function saveFixtureResult(input: ResultInput): Promise<{ ok?: bool
   const { supabase, ok } = await requireCommissioner()
   if (!ok) return { error: 'Commissioner only.' }
 
+  if (input.finished) {
+    if (input.scoreA == null || input.scoreB == null) return { error: 'Scores required when marking finished.' }
+    if (!Number.isInteger(input.scoreA) || !Number.isInteger(input.scoreB)) return { error: 'Scores must be integers.' }
+    if (input.scoreA < 0 || input.scoreB < 0 || input.scoreA > 20 || input.scoreB > 20) return { error: 'Scores out of range.' }
+  }
+
   const patch: Record<string, any> = {
     score_a: input.scoreA,
     score_b: input.scoreB,
