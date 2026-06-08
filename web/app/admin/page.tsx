@@ -44,6 +44,7 @@ export default async function AdminPage() {
     <CommishPanel
       currentStage={currentStage}
       tournamentLocked={settings['tournament_locked'] === true}
+      signupsOpen={settings['signups_open'] !== false}
       counts={{ teams: teams ?? 0, players: players ?? 0, squads: squads ?? 0 }}
       fixturesByStage={byStage}
     />

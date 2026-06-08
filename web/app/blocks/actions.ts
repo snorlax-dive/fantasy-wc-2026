@@ -39,7 +39,10 @@ export async function saveBlock(input: {
   if (locked) return { error: 'This round is locked — blocks are revealed.' }
 
   if (input.targetUserId && input.playerId) {
-    if (input.targetUserId === user.id) return { error: "You can't block your own player." }
+    if (input.targetUserId === user.id) return { error: "You can't block yourself." }
+    // Blind block: you don't see their squad — it lands only if they actually
+    // picked this player (resolved at scoring). Just check the target is playing
+    // this round and the player exists.
     const { data: sq } = await admin
       .from('squads')
       .select('id')
@@ -47,13 +50,8 @@ export async function saveBlock(input: {
       .eq('stage', stage)
       .maybeSingle()
     if (!sq) return { error: 'That manager has no squad this round yet.' }
-    const { data: sp } = await admin
-      .from('squad_players')
-      .select('player_id')
-      .eq('squad_id', sq.id)
-      .eq('player_id', input.playerId)
-      .maybeSingle()
-    if (!sp) return { error: 'That player is not in their squad.' }
+    const { data: pl } = await admin.from('players').select('id').eq('id', input.playerId).maybeSingle()
+    if (!pl) return { error: 'Unknown player.' }
 
     const { error } = await admin
       .from('blocks')

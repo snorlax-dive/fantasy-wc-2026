@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { setStage, setTournamentLock } from './actions'
+import { setStage, setTournamentLock, setSignupsOpen } from './actions'
 
 const STAGES = [
   { v: 'GROUP', label: 'Group' },
@@ -15,16 +15,19 @@ const STAGES = [
 export function CommishPanel({
   currentStage,
   tournamentLocked,
+  signupsOpen,
   counts,
   fixturesByStage,
 }: {
   currentStage: string
   tournamentLocked: boolean
+  signupsOpen: boolean
   counts: { teams: number; players: number; squads: number }
   fixturesByStage: Record<string, { total: number; finished: number }>
 }) {
   const [stage, setStageLocal] = useState(currentStage)
   const [locked, setLocked] = useState(tournamentLocked)
+  const [signups, setSignups] = useState(signupsOpen)
   const [pending, start] = useTransition()
   const [log, setLog] = useState<string[]>([])
 
@@ -34,6 +37,18 @@ export function CommishPanel({
       if (res.ok) {
         setLocked(!locked)
         note(!locked ? '🔒 Game LOCKED — no entries allowed' : '🔓 Game unlocked')
+      } else {
+        note(`❌ ${res.error}`)
+      }
+    })
+  }
+
+  function toggleSignups() {
+    start(async () => {
+      const res = await setSignupsOpen(!signups)
+      if (res.ok) {
+        setSignups(!signups)
+        note(!signups ? '✅ Sign-ups OPEN' : '🚫 Sign-ups CLOSED')
       } else {
         note(`❌ ${res.error}`)
       }
@@ -105,6 +120,24 @@ export function CommishPanel({
             }`}
           >
             {locked ? 'Unlock' : 'Lock now'}
+          </button>
+        </div>
+
+        <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-200 pt-3">
+          <div>
+            <h3 className="text-sm font-bold text-cro-navy">{signups ? 'Sign-ups open' : '🚫 Sign-ups closed'}</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              New players need the invite code; close this once everyone has joined.
+            </p>
+          </div>
+          <button
+            onClick={toggleSignups}
+            disabled={pending}
+            className={`shrink-0 rounded-lg px-4 py-2 text-sm font-bold text-white disabled:opacity-50 ${
+              signups ? 'bg-cro-red hover:bg-cro-red-dark' : 'bg-emerald-600 hover:bg-emerald-500'
+            }`}
+          >
+            {signups ? 'Close sign-ups' : 'Open sign-ups'}
           </button>
         </div>
       </section>

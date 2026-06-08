@@ -18,6 +18,17 @@ async function requireCommissioner() {
   return { supabase, ok: data?.is_commissioner === true }
 }
 
+export async function setSignupsOpen(open: boolean): Promise<{ ok?: boolean; error?: string }> {
+  const { supabase, ok } = await requireCommissioner()
+  if (!ok) return { error: 'Commissioner only.' }
+  const { error } = await supabase
+    .from('settings')
+    .update({ value: open, updated_at: new Date().toISOString() })
+    .eq('key', 'signups_open')
+  if (error) return { error: error.message }
+  return { ok: true }
+}
+
 export async function setTournamentLock(locked: boolean): Promise<{ ok?: boolean; error?: string }> {
   const { supabase, ok } = await requireCommissioner()
   if (!ok) return { error: 'Commissioner only.' }

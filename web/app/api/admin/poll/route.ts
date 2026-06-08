@@ -12,8 +12,7 @@ export const maxDuration = 60
 async function authorized(req: Request): Promise<boolean> {
   const secret = process.env.CRON_SECRET
   const auth = req.headers.get('authorization') ?? ''
-  const key = new URL(req.url).searchParams.get('key')
-  if (secret && (auth === `Bearer ${secret}` || key === secret)) return true
+  if (secret && auth === `Bearer ${secret}`) return true
   const supabase = await createClient()
   const {
     data: { user },
@@ -28,6 +27,16 @@ async function authorized(req: Request): Promise<boolean> {
 }
 
 const FINISHED = new Set(['FT', 'AET', 'PEN'])
+
+function mapStage(round: string): 'GROUP' | 'R32' | 'R16' | 'QF' | 'SF' | 'FINAL' {
+  const s = (round ?? '').toLowerCase()
+  if (s.includes('group')) return 'GROUP'
+  if (s.includes('round of 32')) return 'R32'
+  if (s.includes('round of 16')) return 'R16'
+  if (s.includes('quarter')) return 'QF'
+  if (s.includes('semi')) return 'SF'
+  return 'FINAL'
+}
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export async function GET(req: Request) {
@@ -60,6 +69,27 @@ export async function GET(req: Request) {
     }
 
     const force = url.searchParams.get('force') === '1'
+
+    // Teams map (api id → our id) for matchups + winner.
+    const { data: ourTeams } = await db.from('teams').select('id, api_team_id')
+    const teamByApi = new Map<number, number>((ourTeams ?? []).map((t: any) => [t.api_team_id, t.id]))
+
+    // Auto-seed: upsert scheduling fields for ALL fixtures so new knockout matchups
+    // appear automatically (no manual re-seed). Does NOT touch score/finished/status.
+    const fxRows = fixtures.map((f: any) => ({
+      api_fixture_id: f.fixture.id,
+      round: f.league?.round ?? 'Unknown',
+      stage: mapStage(f.league?.round ?? ''),
+      kickoff: f.fixture.date,
+      lock_time: f.fixture.date,
+      team_a: teamByApi.get(f.teams?.home?.id) ?? null,
+      team_b: teamByApi.get(f.teams?.away?.id) ?? null,
+    }))
+    if (fxRows.length) {
+      const { error: seedErr } = await db.from('fixtures').upsert(fxRows, { onConflict: 'api_fixture_id' })
+      if (seedErr) throw seedErr
+    }
+
     const { data: ourFx } = await db.from('fixtures').select('id, api_fixture_id, finished')
     const fxByApi = new Map<number, any>((ourFx ?? []).map((r: any) => [r.api_fixture_id, r]))
     const ourPlayers = await fetchAll((from, to) =>
@@ -84,6 +114,9 @@ export async function GET(req: Request) {
       const gh = f.goals?.home ?? 0
       const ga = f.goals?.away ?? 0
       const homeId = f.teams?.home?.id
+      const winnerApi =
+        f.teams?.home?.winner === true ? homeId : f.teams?.away?.winner === true ? f.teams?.away?.id : null
+      const winnerTeam = winnerApi != null ? teamByApi.get(winnerApi) ?? null : null
 
       const teamsPlayers = await apiFootball<any>('/fixtures/players', { fixture: f.fixture.id })
       let hadRed = false
@@ -130,7 +163,14 @@ export async function GET(req: Request) {
 
       const { error: fe } = await db
         .from('fixtures')
-        .update({ score_a: gh, score_b: ga, had_red_card: hadRed, status: 'FINISHED', finished: true })
+        .update({
+          score_a: gh,
+          score_b: ga,
+          had_red_card: hadRed,
+          status: 'FINISHED',
+          finished: true,
+          winner_team: winnerTeam,
+        })
         .eq('id', ourFixtureId)
       if (fe) throw fe
       fixturesWritten++

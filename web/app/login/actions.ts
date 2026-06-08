@@ -21,12 +21,18 @@ export async function requestMagicLink(
 
   // Returning players don't need the invite code — only first-timers do.
   let isNew = true
+  let signupsOpen = true
   try {
     const admin = createAdminClient()
     const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 })
     isNew = !(data?.users ?? []).some((u) => (u.email ?? '').toLowerCase() === email)
+    const { data: su } = await admin.from('settings').select('value').eq('key', 'signups_open').maybeSingle()
+    signupsOpen = su?.value !== false // default open if unset
   } catch {
     isNew = true // if the check fails, require the code (safe default)
+  }
+  if (isNew && !signupsOpen) {
+    return { error: 'Sign-ups are closed for this league.' }
   }
   if (isNew && invite !== process.env.INVITE_CODE) {
     return { error: 'First time here? Enter the league invite code to join.' }

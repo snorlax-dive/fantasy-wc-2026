@@ -12,8 +12,7 @@ export const maxDuration = 60
 async function authorized(req: Request): Promise<boolean> {
   const secret = process.env.CRON_SECRET
   const auth = req.headers.get('authorization') ?? ''
-  const key = new URL(req.url).searchParams.get('key')
-  if (secret && (auth === `Bearer ${secret}` || key === secret)) return true
+  if (secret && auth === `Bearer ${secret}`) return true
   const supabase = await createClient()
   const {
     data: { user },

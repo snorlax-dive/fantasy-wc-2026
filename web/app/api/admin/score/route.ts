@@ -19,8 +19,7 @@ export const maxDuration = 60
 async function authorized(req: Request): Promise<boolean> {
   const secret = process.env.CRON_SECRET
   const auth = req.headers.get('authorization') ?? ''
-  const key = new URL(req.url).searchParams.get('key')
-  if (secret && (auth === `Bearer ${secret}` || key === secret)) return true
+  if (secret && auth === `Bearer ${secret}`) return true
   const supabase = await createClient()
   const {
     data: { user },
@@ -53,7 +52,7 @@ export async function GET(req: Request) {
     const [{ data: fixtures }, { data: settingsRows }] = await Promise.all([
       db
         .from('fixtures')
-        .select('id, stage, score_a, score_b, had_red_card, finished, team_a, team_b, lock_time'),
+        .select('id, stage, score_a, score_b, had_red_card, finished, team_a, team_b, lock_time, kickoff, winner_team'),
       db.from('settings').select('key, value'),
     ])
     // These can exceed 1000 rows — page through all of them.
@@ -194,16 +193,15 @@ export async function GET(req: Request) {
       for (const t of [f.team_a, f.team_b])
         if (t != null) deepest.set(t, Math.max(deepest.get(t) ?? 0, o))
     }
-    const finalFx = allFixtures.find((f: any) => f.stage === 'FINAL' && f.finished)
-    let champion: number | null = null
-    if (finalFx && finalFx.score_a != null && finalFx.score_b != null) {
-      champion =
-        finalFx.score_a > finalFx.score_b
-          ? finalFx.team_a
-          : finalFx.score_b > finalFx.score_a
-            ? finalFx.team_b
-            : null
-    }
+    // Actual Final = the latest-kickoff FINAL-stage fixture (excludes the earlier 3rd-place match).
+    const finalFx =
+      allFixtures
+        .filter((f: any) => f.stage === 'FINAL')
+        .sort((a: any, b: any) => (a.kickoff < b.kickoff ? 1 : -1))[0] ?? null
+    const champion: number | null = finalFx?.finished ? finalFx.winner_team ?? null : null
+    const finalists = new Set<number>(
+      finalFx ? [finalFx.team_a, finalFx.team_b].filter((t: any): t is number => t != null) : []
+    )
     const goalsByPlayer = new Map<number, number>()
     for (const s of allStats) goalsByPlayer.set(s.player_id, (goalsByPlayer.get(s.player_id) ?? 0) + s.goals)
     let goldenBoot: number | null = null
@@ -221,8 +219,10 @@ export async function GET(req: Request) {
         if (maxGoals > 0 && bp.player_id === goldenBoot) pts = base
       } else if (bp.pick_type === 'CHAMPION') {
         if (champion != null && bp.team_id === champion) pts = base
+      } else if (bp.pick_type === 'REACH_FINAL') {
+        if (bp.team_id != null && finalists.has(bp.team_id)) pts = base // actual finalists only (not 3rd-place)
       } else {
-        const lvl = REACH_LEVEL[bp.pick_type]
+        const lvl = REACH_LEVEL[bp.pick_type] // R16 / QF / SF via appearance
         if (lvl && bp.team_id != null && (deepest.get(bp.team_id) ?? 0) >= lvl) pts = base
       }
       if (pts !== bp.points) bracketUpdates.push({ ...bp, points: pts })

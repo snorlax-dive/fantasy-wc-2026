@@ -1,14 +1,12 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { saveBlock, setShield } from './actions'
 import { toast } from '@/components/toast'
 
-export type Rival = {
-  userId: string
-  name: string
-  players: { id: number; name: string; position: string }[]
-}
+export type Rival = { userId: string; name: string }
+export type PoolPlayer = { id: number; name: string; position: string; team: string }
+export type Revealed = { blocker: string; target: string; player: string; hit: boolean }
 
 export function BlocksBoard({
   stageLabel,
@@ -17,6 +15,7 @@ export function BlocksBoard({
   perTargetCap,
   shieldsLeft,
   rivals,
+  players,
   myBlock,
   usedShield,
   revealed,
@@ -27,17 +26,25 @@ export function BlocksBoard({
   perTargetCap: number
   shieldsLeft: number
   rivals: Rival[]
+  players: PoolPlayer[]
   myBlock: { targetUserId: string; playerId: number } | null
   usedShield: boolean
-  revealed: { blocker: string; target: string; player: string }[]
+  revealed: Revealed[]
 }) {
   const [targetId, setTargetId] = useState<string>(myBlock?.targetUserId ?? '')
   const [playerId, setPlayerId] = useState<number | null>(myBlock?.playerId ?? null)
+  const [q, setQ] = useState('')
   const [shield, setShieldState] = useState<boolean>(usedShield)
   const [pending, start] = useTransition()
   const [msg, setMsg] = useState<{ ok?: boolean; error?: string } | null>(null)
 
-  const target = rivals.find((r) => r.userId === targetId)
+  const playerById = useMemo(() => new Map(players.map((p) => [p.id, p])), [players])
+  const chosen = playerId != null ? playerById.get(playerId) : null
+  const results = useMemo(() => {
+    if (q.length < 2) return []
+    const s = q.toLowerCase()
+    return players.filter((p) => p.name.toLowerCase().includes(s) || p.team.toLowerCase().includes(s)).slice(0, 12)
+  }, [players, q])
 
   function commit() {
     start(async () => {
@@ -49,7 +56,11 @@ export function BlocksBoard({
   function clearBlock() {
     setTargetId('')
     setPlayerId(null)
-    start(async () => setMsg(await saveBlock({ targetUserId: null, playerId: null })))
+    start(async () => {
+      const res = await saveBlock({ targetUserId: null, playerId: null })
+      setMsg(res)
+      toast('Block cleared')
+    })
   }
   function toggleShield(use: boolean) {
     setShieldState(use)
@@ -69,8 +80,6 @@ export function BlocksBoard({
       {!stageOpen ? (
         <div className="mt-6 rounded-2xl bg-white p-6 text-center text-sm text-slate-500 shadow-sm ring-1 ring-slate-200">
           Blocks &amp; shields open in the <span className="font-semibold text-cro-navy">knockout rounds</span>.
-          Once the commissioner starts the Round of 32, you&apos;ll be able to block a rival&apos;s player and
-          spend shields here.
         </div>
       ) : locked ? (
         <>
@@ -80,10 +89,19 @@ export function BlocksBoard({
           <h2 className="mt-5 text-sm font-bold text-cro-navy">Who blocked whom</h2>
           <ul className="mt-2 divide-y divide-slate-100 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
             {revealed.map((r, i) => (
-              <li key={i} className="px-3 py-2 text-sm text-slate-600">
-                <span className="font-semibold text-cro-navy">{r.blocker}</span> blocked{' '}
-                <span className="font-semibold text-cro-red">{r.player}</span> on{' '}
-                <span className="font-semibold text-cro-navy">{r.target}</span>
+              <li key={i} className="flex items-center gap-2 px-3 py-2 text-sm">
+                <span className="min-w-0 flex-1 truncate text-slate-600">
+                  <span className="font-semibold text-cro-navy">{r.blocker}</span> blocked{' '}
+                  <span className="text-cro-red">{r.player}</span> on{' '}
+                  <span className="font-semibold text-cro-navy">{r.target}</span>
+                </span>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                    r.hit ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                  }`}
+                >
+                  {r.hit ? 'HIT' : 'missed'}
+                </span>
               </li>
             ))}
             {revealed.length === 0 && (
@@ -94,9 +112,9 @@ export function BlocksBoard({
       ) : (
         <>
           <p className="mt-1 text-sm text-slate-500">
-            Pick one rival&apos;s player to neutralise this round — they score 0 for that manager. Your
-            choice is <span className="font-semibold text-cro-navy">secret until kickoff</span>. Up to{' '}
-            {perTargetCap} blocks can land on one manager.
+            Pick a rival and the player you think they&apos;ll field — if you&apos;re right, that player scores
+            0 for them this round. You <span className="font-semibold text-cro-navy">can&apos;t see their squad</span>,
+            and your block stays secret until kickoff. Up to {perTargetCap} blocks can land on one manager.
           </p>
 
           {/* Shield */}
@@ -120,15 +138,12 @@ export function BlocksBoard({
             </div>
           </div>
 
-          {/* Block target */}
+          {/* Block */}
           <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
             <h2 className="text-sm font-bold text-cro-navy">Your block</h2>
             <select
               value={targetId}
-              onChange={(e) => {
-                setTargetId(e.target.value)
-                setPlayerId(null)
-              }}
+              onChange={(e) => setTargetId(e.target.value)}
               className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-cro-red"
             >
               <option value="">— choose a rival —</option>
@@ -139,24 +154,48 @@ export function BlocksBoard({
               ))}
             </select>
 
-            {target && (
-              <ul className="mt-3 grid max-h-72 grid-cols-1 gap-1 overflow-auto sm:grid-cols-2">
-                {target.players.map((p) => (
-                  <li key={p.id}>
-                    <button
-                      onClick={() => setPlayerId(p.id)}
-                      className={`flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm ring-1 ${
-                        playerId === p.id
-                          ? 'bg-red-50 ring-cro-red'
-                          : 'bg-white ring-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span className="truncate text-cro-navy">{p.name}</span>
-                      <span className="text-xs text-slate-400">{p.position}</span>
+            {targetId && (
+              <div className="mt-3">
+                {chosen ? (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="rounded-full bg-red-50 px-3 py-1 font-semibold text-cro-red ring-1 ring-red-200">
+                      {chosen.name} · {chosen.team}
+                    </span>
+                    <button onClick={() => setPlayerId(null)} className="text-xs text-slate-400 hover:text-red-600">
+                      change
                     </button>
-                  </li>
-                ))}
-              </ul>
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      value={q}
+                      onChange={(e) => setQ(e.target.value)}
+                      placeholder="Search the player you think they picked…"
+                      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-cro-red"
+                    />
+                    {results.length > 0 && (
+                      <ul className="mt-1 divide-y divide-slate-100 overflow-hidden rounded-lg ring-1 ring-slate-200">
+                        {results.map((p) => (
+                          <li key={p.id}>
+                            <button
+                              onClick={() => {
+                                setPlayerId(p.id)
+                                setQ('')
+                              }}
+                              className="flex w-full items-center justify-between bg-white px-3 py-1.5 text-left text-sm hover:bg-slate-50"
+                            >
+                              <span className="truncate text-cro-navy">{p.name}</span>
+                              <span className="text-xs text-slate-400">
+                                {p.position} · {p.team}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                )}
+              </div>
             )}
 
             {msg?.error && <p className="mt-3 text-sm text-red-600">{msg.error}</p>}
