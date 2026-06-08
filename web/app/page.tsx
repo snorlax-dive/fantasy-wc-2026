@@ -65,7 +65,10 @@ export default async function Home() {
     admin.from('blocks').select('blocker, target, player_id, stage').eq('revealed', true).limit(8),
     admin.from('player_match_stats').select('player_id, fantasy_points').order('fantasy_points', { ascending: false }).limit(6),
     admin.from('settings').select('key, value'),
-    admin.from('fixtures').select('id, stage, kickoff, team_a, team_b').order('kickoff', { ascending: true }),
+    admin
+      .from('fixtures')
+      .select('id, stage, kickoff, team_a, team_b, status, score_a, score_b')
+      .order('kickoff', { ascending: true }),
     admin.from('teams').select('id, name'),
   ])
 
@@ -78,13 +81,22 @@ export default async function Home() {
   const lockISO = (fixtures ?? []).find((f: any) => f.stage === currentStage)?.kickoff ?? null
   const nowMs = Date.now()
   const upcoming = (fixtures ?? [])
-    .filter((f: any) => new Date(f.kickoff).getTime() > nowMs)
+    .filter((f: any) => f.status !== 'LIVE' && new Date(f.kickoff).getTime() > nowMs)
     .slice(0, 5)
     .map((f: any) => ({
       id: f.id,
       kickoff: f.kickoff,
       home: teamName.get(f.team_a) ?? 'TBD',
       away: teamName.get(f.team_b) ?? 'TBD',
+    }))
+  const live = (fixtures ?? [])
+    .filter((f: any) => f.status === 'LIVE')
+    .map((f: any) => ({
+      id: f.id,
+      home: teamName.get(f.team_a) ?? 'TBD',
+      away: teamName.get(f.team_b) ?? 'TBD',
+      a: f.score_a ?? 0,
+      b: f.score_b ?? 0,
     }))
   const standings = (lb ?? []).slice(0, 3) as any[]
 
@@ -144,6 +156,24 @@ export default async function Home() {
           </Link>
         ))}
       </div>
+
+      {/* Live now */}
+      {live.length > 0 && (
+        <section className="mt-4 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-red-200">
+          <h2 className="border-b border-red-100 bg-red-50 px-4 py-2 text-sm font-bold text-cro-red">🔴 Live now</h2>
+          <ul className="divide-y divide-slate-100">
+            {live.map((m) => (
+              <li key={m.id} className="flex items-center gap-2 px-4 py-2 text-sm">
+                <span className="flex-1 truncate text-right font-medium text-cro-navy">{m.home}</span>
+                <span className="rounded bg-cro-navy px-2 py-0.5 text-xs font-extrabold tabular-nums text-white">
+                  {m.a}–{m.b}
+                </span>
+                <span className="flex-1 truncate font-medium text-cro-navy">{m.away}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Next matches */}
       {upcoming.length > 0 && (

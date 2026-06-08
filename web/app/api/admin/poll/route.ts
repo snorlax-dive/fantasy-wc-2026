@@ -27,6 +27,7 @@ async function authorized(req: Request): Promise<boolean> {
 }
 
 const FINISHED = new Set(['FT', 'AET', 'PEN'])
+const LIVE = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT', 'SUSP'])
 
 function mapStage(round: string): 'GROUP' | 'R32' | 'R16' | 'QF' | 'SF' | 'FINAL' {
   const s = (round ?? '').toLowerCase()
@@ -103,13 +104,16 @@ export async function GET(req: Request) {
       const o = fxByApi.get(f.fixture.id)
       return o && (force || !o.finished)
     })
-    const batch = pending.slice(0, limit)
+    // Live matches are re-processed every run for provisional (live) points.
+    const live = fixtures.filter((f: any) => LIVE.has(f.fixture?.status?.short) && fxByApi.get(f.fixture.id))
+    const toProcess = [...live, ...pending].slice(0, limit)
     let fixturesWritten = 0
     let statsWritten = 0
 
-    for (const f of batch) {
+    for (const f of toProcess) {
       const ourFixtureId = fxByApi.get(f.fixture.id)?.id
       if (!ourFixtureId) continue
+      const isFinished = FINISHED.has(f.fixture?.status?.short)
 
       const gh = f.goals?.home ?? 0
       const ga = f.goals?.away ?? 0
@@ -167,9 +171,9 @@ export async function GET(req: Request) {
           score_a: gh,
           score_b: ga,
           had_red_card: hadRed,
-          status: 'FINISHED',
-          finished: true,
-          winner_team: winnerTeam,
+          status: isFinished ? 'FINISHED' : 'LIVE',
+          finished: isFinished,
+          winner_team: isFinished ? winnerTeam : null,
         })
         .eq('id', ourFixtureId)
       if (fe) throw fe
@@ -179,8 +183,9 @@ export async function GET(req: Request) {
     return NextResponse.json({
       ok: true,
       finishedTotal: finished.length,
+      live: live.length,
       pending: pending.length,
-      processed: batch.length,
+      processed: toProcess.length,
       fixturesWritten,
       statsWritten,
     })
