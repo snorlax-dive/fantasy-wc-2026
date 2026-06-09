@@ -153,15 +153,15 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
     const adminDb = setupAdminDb()
     adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 1, name: 'Norway', api_team_id: 10 }] }))
     adminDb.from.mockReturnValueOnce(makeChain({ data: [] })) // allGroupFx
+    adminDb.from.mockReturnValueOnce(makeChain({ data: null, error: null })) // personal_attack column probe
     adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 50, api_player_id: 999, position: 'FWD' }] }))
 
-    let capturedFields: { start_prob: number } | null = null
+    let capturedRow: Record<string, unknown> | null = null
     adminDb.from.mockImplementationOnce(() => {
       const chain = makeChain({ data: null, error: null })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(chain as any).upsert = vi.fn((rows: unknown) => {
-        const arr = rows as Array<{ start_prob: number }>
-        if (arr?.length) capturedFields = arr[0]
+      ;(chain as any).update = vi.fn((...args: unknown[]) => {
+        capturedRow = args[0] as Record<string, unknown>
         return chain
       })
       return chain
@@ -178,10 +178,10 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
 
     const res = await GET(makeRequest({ step: 'qualifiers' }))
     expect(res.status).toBe(200)
-    expect(capturedFields).not.toBeNull()
+    expect(capturedRow).not.toBeNull()
     // Shrinkage pulls the result below 0.97 (formula: (4*shirtPrior + 2*1.0) / 6)
-    expect(capturedFields!.start_prob).toBeLessThan(0.97)
-    expect(capturedFields!.start_prob).toBeGreaterThan(0.10)
+    expect(capturedRow!.start_prob as number).toBeLessThan(0.97)
+    expect(capturedRow!.start_prob as number).toBeGreaterThan(0.10)
   })
 
   it('elite-scoring FWD gets personal_attack above team attack', async () => {
@@ -190,15 +190,15 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
     const adminDb = setupAdminDb()
     adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 1, name: 'Norway', api_team_id: 10 }] }))
     adminDb.from.mockReturnValueOnce(makeChain({ data: [] })) // allGroupFx
+    adminDb.from.mockReturnValueOnce(makeChain({ data: null, error: null })) // personal_attack column probe
     adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 50, api_player_id: 999, position: 'FWD' }] }))
 
-    let capturedFields: { personal_attack: number | null } | null = null
+    let capturedRow: Record<string, unknown> | null = null
     adminDb.from.mockImplementationOnce(() => {
       const chain = makeChain({ data: null, error: null })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(chain as any).upsert = vi.fn((rows: unknown) => {
-        const arr = rows as Array<{ personal_attack: number | null }>
-        if (arr?.length) capturedFields = arr[0]
+      ;(chain as any).update = vi.fn((...args: unknown[]) => {
+        capturedRow = args[0] as Record<string, unknown>
         return chain
       })
       return chain
@@ -215,26 +215,26 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
 
     const res = await GET(makeRequest({ step: 'qualifiers' }))
     expect(res.status).toBe(200)
-    expect(capturedFields).not.toBeNull()
-    const pa = capturedFields!.personal_attack
+    expect(capturedRow).not.toBeNull()
+    const pa = capturedRow!.personal_attack as number | null
     expect(pa).not.toBeNull()
     expect(pa!).toBeGreaterThan(0.80) // Norway team attack
     expect(pa!).toBeLessThanOrEqual(0.97)
   })
 
-  it('GK gets null personal_attack in upsert', async () => {
+  it('GK gets null personal_attack in update', async () => {
     const adminDb = setupAdminDb()
     adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 1, name: 'Norway', api_team_id: 10 }] }))
     adminDb.from.mockReturnValueOnce(makeChain({ data: [] })) // allGroupFx
+    adminDb.from.mockReturnValueOnce(makeChain({ data: null, error: null })) // personal_attack column probe
     adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 51, api_player_id: 888, position: 'GK' }] }))
 
-    let capturedFields: { personal_attack: number | null } | null = null
+    let capturedRow: Record<string, unknown> | null = null
     adminDb.from.mockImplementationOnce(() => {
       const chain = makeChain({ data: null, error: null })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(chain as any).upsert = vi.fn((rows: unknown) => {
-        const arr = rows as Array<{ personal_attack: number | null }>
-        if (arr?.length) capturedFields = arr[0]
+      ;(chain as any).update = vi.fn((...args: unknown[]) => {
+        capturedRow = args[0] as Record<string, unknown>
         return chain
       })
       return chain
@@ -251,23 +251,23 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
 
     const res = await GET(makeRequest({ step: 'qualifiers' }))
     expect(res.status).toBe(200)
-    expect(capturedFields).not.toBeNull()
-    expect(capturedFields!.personal_attack).toBeNull()
+    expect(capturedRow).not.toBeNull()
+    expect(capturedRow!.personal_attack).toBeNull()
   })
 
   it('startProb clamped to [0.10, 0.97] for 100% start rate', async () => {
     const adminDb = setupAdminDb()
     adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 1, name: 'France', api_team_id: 10 }] }))
     adminDb.from.mockReturnValueOnce(makeChain({ data: [] })) // GROUP fixtures (none)
+    adminDb.from.mockReturnValueOnce(makeChain({ data: null, error: null })) // personal_attack column probe
     adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 50, api_player_id: 100, position: 'FWD' }] }))
 
-    let capturedFields: { start_prob: number } | null = null
+    let capturedRow: Record<string, unknown> | null = null
     adminDb.from.mockImplementationOnce(() => {
       const chain = makeChain({ data: null, error: null })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(chain as any).upsert = vi.fn((rows: unknown) => {
-        const arr = rows as Array<{ start_prob: number }>
-        if (arr?.length) capturedFields = arr[0]
+      ;(chain as any).update = vi.fn((...args: unknown[]) => {
+        capturedRow = args[0] as Record<string, unknown>
         return chain
       })
       return chain
@@ -283,8 +283,8 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
 
     const res = await GET(makeRequest({ step: 'qualifiers' }))
     expect(res.status).toBe(200)
-    expect(capturedFields).not.toBeNull()
-    expect(capturedFields!.start_prob).toBeGreaterThanOrEqual(0.10)
-    expect(capturedFields!.start_prob).toBeLessThanOrEqual(0.97)
+    expect(capturedRow).not.toBeNull()
+    expect(capturedRow!.start_prob as number).toBeGreaterThanOrEqual(0.10)
+    expect(capturedRow!.start_prob as number).toBeLessThanOrEqual(0.97)
   })
 })
