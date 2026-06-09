@@ -128,11 +128,13 @@ export function priceFromExpectedPoints(pos: Pos, perMatchPts: number): number {
 // goals and assists, shrunk toward team attack via empirical-Bayes (w=8).
 // Returns null for GK/DEF (too few goals/assists to be a meaningful signal)
 // and when there is no playing time.
+// For MID players, midRole controls which goal/assist baseline is used
+// (ATK: 0.20g/0.24a, DEF: 0.07g/0.10a); omitting it defaults to DEF.
 export function derivePersonalAttack(
   pos: Pos,
-  midRole: 'ATK' | 'DEF' | undefined = undefined,
   teamAttack: number,
   observed: { totalGoals: number; totalAssists: number; totalMinutes: number; totalAppearances: number },
+  midRole?: 'ATK' | 'DEF',
 ): number | null {
   if (pos === 'GK' || pos === 'DEF') return null
   if (observed.totalMinutes <= 0 || observed.totalAppearances <= 0) return null

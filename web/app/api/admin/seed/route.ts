@@ -343,9 +343,9 @@ export async function GET(req: Request) {
             (wSp * shirtBasedProb + totalAppearances * rawProb) / (wSp + totalAppearances)
           ))
 
-          const personalAttack = derivePersonalAttack(pos, midRole, attack, {
+          const personalAttack = derivePersonalAttack(pos, attack, {
             totalGoals, totalAssists, totalMinutes, totalAppearances,
-          })
+          }, midRole)
 
           let xPts: number
           if (groupFx.length === 3) {
