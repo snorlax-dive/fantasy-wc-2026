@@ -81,7 +81,7 @@ export async function GET(req: Request) {
     const matchesExpected = matchesExpectedFor(stage)
 
     const players = await fetchAll((from, to) =>
-      db.from('players').select('id, api_player_id, position, team_id, active, start_prob').range(from, to)
+      db.from('players').select('id, api_player_id, position, team_id, active, start_prob, personal_attack').range(from, to)
     )
     const { data: teams } = await db.from('teams').select('id, name')
     const teamNameById = new Map<number, string>((teams ?? []).map((t: any) => [t.id, t.name]))
@@ -144,6 +144,7 @@ export async function GET(req: Request) {
         midRole,
         realized: form ? { matches: form.matches, pointsPerMatch: form.pointsPerMatch } : undefined,
         priorWeight: 3,
+        personalAttack: p.personal_attack ?? undefined,
       }
 
       // For GROUP (3 opponents), sum per-fixture projections so each opponent's attack

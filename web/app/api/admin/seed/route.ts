@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { apiFootball, WORLD_CUP_LEAGUE, SEASON } from '@/lib/apiFootball'
 import { teamRatings } from '@/lib/teamStrength'
-import { projectedPointsPerMatch, projectedPoints, priceFromExpectedPoints } from '@/lib/projection'
+import { projectedPointsPerMatch, projectedPoints, priceFromExpectedPoints, derivePersonalAttack } from '@/lib/projection'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -309,19 +309,34 @@ export async function GET(req: Request) {
 
           let totalMinutes = 0
           let totalAppearances = 0
+          let totalGoals = 0
+          let totalAssists = 0
           for (const s of stats) {
             totalMinutes += s.games?.minutes ?? 0
             totalAppearances += s.games?.appearences ?? 0
+            totalGoals += s.goals?.total ?? 0
+            totalAssists += s.goals?.assists ?? 0
           }
           if (totalAppearances <= 0) continue
 
-          // startProb = fraction of possible minutes actually played, clamped to a sensible range.
-          const startProb = Math.min(0.97, Math.max(0.10, totalMinutes / (totalAppearances * 90)))
           const { pos } = our
-          // Use shirt number from stats (same heuristic as step=players) so role classification
-          // is consistent across steps and re-running qualifiers doesn't cause price churn.
+          // Use shirt number from stats so role classification is consistent across
+          // steps and re-running qualifiers doesn't cause price churn.
           const shirtNumber = (stats[0] ?? entry.statistics?.[0])?.games?.number ?? null
           const midRole = pos === 'MID' ? inferMidRole(shirtNumber) : undefined
+
+          // Shrink qualifier-derived startProb toward shirt-number prior (w=4) to protect
+          // against elite players with sparse qualifier participation (injury, rotation).
+          const shirtBasedProb = startProbFor(apiId, shirtNumber)
+          const rawProb = totalMinutes / (totalAppearances * 90)
+          const w_sp = 4
+          const startProb = Math.min(0.97, Math.max(0.10,
+            (w_sp * shirtBasedProb + totalAppearances * rawProb) / (w_sp + totalAppearances)
+          ))
+
+          const personalAttack = derivePersonalAttack(pos, midRole, attack, {
+            totalGoals, totalAssists, totalMinutes, totalAppearances,
+          })
 
           let xPts: number
           if (groupFx.length === 3) {
@@ -330,15 +345,18 @@ export async function GET(req: Request) {
               const { attack: oppAtk } = teamRatings(teamNameById.get(oppId) ?? '')
               return sum + projectedPointsPerMatch({
                 pos, attack, defense, startProb, midRole, opponentAttack: oppAtk, matchesExpected: 1,
+                personalAttack: personalAttack ?? undefined,
               })
             }, 0)
           } else {
-            xPts = projectedPoints({ pos, attack, defense, startProb, midRole, matchesExpected: 3 })
+            xPts = projectedPoints({ pos, attack, defense, startProb, midRole, matchesExpected: 3,
+              personalAttack: personalAttack ?? undefined,
+            })
           }
 
           const price = priceFromExpectedPoints(pos, xPts / 3)
           const expected_points = Math.round(xPts * 100) / 100
-          playerUpdates.push({ id: our.id, start_prob: startProb, price, expected_points })
+          playerUpdates.push({ id: our.id, start_prob: startProb, price, expected_points, personal_attack: personalAttack })
 
           if (preview.length < 20) {
             preview.push({
