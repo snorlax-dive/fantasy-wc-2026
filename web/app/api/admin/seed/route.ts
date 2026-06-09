@@ -355,10 +355,19 @@ export async function GET(req: Request) {
         }
 
         if (playerUpdates.length) {
-          const { error: upErr } = await db
-            .from('players')
-            .upsert(playerUpdates, { onConflict: 'id' })
-          if (upErr) throw upErr
+          // These rows already exist — use UPDATE, not upsert. (Upsert's INSERT path
+          // would require NOT NULL team_id/name/position, which we don't resupply here,
+          // and would fail with a not-null violation.)
+          const results = await Promise.all(
+            playerUpdates.map((u) =>
+              db
+                .from('players')
+                .update({ start_prob: u.start_prob, price: u.price, expected_points: u.expected_points })
+                .eq('id', u.id)
+            )
+          )
+          const failed = results.find((r) => r.error)
+          if (failed?.error) throw failed.error
           updated += playerUpdates.length
         }
       }
