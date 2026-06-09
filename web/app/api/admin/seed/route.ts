@@ -345,7 +345,7 @@ export async function GET(req: Request) {
 
           const personalAttack = derivePersonalAttack(pos, attack, {
             totalGoals, totalAssists, totalMinutes, totalAppearances,
-          })
+          }, midRole)
 
           let xPts: number
           if (groupFx.length === 3) {

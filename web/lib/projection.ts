@@ -128,19 +128,21 @@ export function priceFromExpectedPoints(pos: Pos, perMatchPts: number): number {
 // goals and assists, shrunk toward team attack via empirical-Bayes (w=8).
 // Returns null for GK/DEF (too few goals/assists to be a meaningful signal)
 // and when there is no playing time.
-//
-// Uses position-level base rates (not midRole-split rates) so the stored value
-// has a stable, role-independent interpretation. The midRole split in
-// projectedPointsPerMatch still applies separately to goalRate/assistRate.
+// For MID players, midRole controls which goal/assist baseline is used
+// (ATK: 0.20g/0.24a, DEF: 0.07g/0.10a); omitting it defaults to DEF.
 export function derivePersonalAttack(
   pos: Pos,
   teamAttack: number,
   observed: { totalGoals: number; totalAssists: number; totalMinutes: number; totalAppearances: number },
+  midRole?: 'ATK' | 'DEF',
 ): number | null {
   if (pos === 'GK' || pos === 'DEF') return null
   if (observed.totalMinutes <= 0 || observed.totalAppearances <= 0) return null
 
-  const modelRate = BASE_GOAL_RATE[pos] * GOAL_PTS[pos] + BASE_ASSIST_RATE[pos] * 3
+  const effectiveMidRole = midRole ?? 'DEF'
+  const goalRate   = pos === 'MID' ? (effectiveMidRole === 'ATK' ? 0.20 : 0.07) : BASE_GOAL_RATE[pos]
+  const assistRate = pos === 'MID' ? (effectiveMidRole === 'ATK' ? 0.24 : 0.10) : BASE_ASSIST_RATE[pos]
+  const modelRate  = goalRate * GOAL_PTS[pos] + assistRate * 3
   if (modelRate <= 0) return null
 
   const ptsPer90 = ((observed.totalGoals * GOAL_PTS[pos] + observed.totalAssists * 3) / observed.totalMinutes) * 90

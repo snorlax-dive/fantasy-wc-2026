@@ -238,7 +238,7 @@ describe('derivePersonalAttack', () => {
     expect(result).toBe(0.97)
   })
 
-  it('zero scorer: personal_attack below team attack (implied=0 shrinks result below team rating)', () => {
+  it('zero scorer: personal_attack below team attack (shrunk toward 0 via prior)', () => {
     const result = derivePersonalAttack('FWD', 0.8, {
       totalGoals: 0, totalAssists: 0, totalMinutes: 900, totalAppearances: 10,
     })
@@ -257,6 +257,17 @@ describe('derivePersonalAttack', () => {
     expect(result).not.toBeNull()
     expect(result!).toBeLessThan(0.97)
     expect(result!).toBeGreaterThan(0.10)
+  })
+
+  it('DEF MID gets higher personal_attack than ATK MID for identical stats (lower baseline expectation)', () => {
+    // DEF mid model rate is lower → same observed goals/assists look "more impressive"
+    // relative to expectation → higher implied multiplier → higher shrunk value.
+    const obs = { totalGoals: 3, totalAssists: 2, totalMinutes: 900, totalAppearances: 10 }
+    const atk = derivePersonalAttack('MID', 0.6, obs, 'ATK')
+    const def = derivePersonalAttack('MID', 0.6, obs, 'DEF')
+    expect(atk).not.toBeNull()
+    expect(def).not.toBeNull()
+    expect(def!).toBeGreaterThan(atk!)
   })
 
   it('result is always in [0.10, 0.97]', () => {
