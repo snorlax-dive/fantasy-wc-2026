@@ -147,19 +147,127 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
     expect(body.updated).toBe(0)
   })
 
+  it('startProb is shrunk toward shirt-number prior (not purely raw qualifier rate)', async () => {
+    // Player played 100% of qualifier minutes (raw rate = 1.0 → old code would clamp to 0.97).
+    // With shrinkage (w=4, appearances=2), result is pulled toward shirt-number prior < 0.97.
+    const adminDb = setupAdminDb()
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 1, name: 'Norway', api_team_id: 10 }] }))
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [] })) // allGroupFx
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 50, api_player_id: 999, position: 'FWD' }] }))
+
+    let capturedFields: { start_prob: number } | null = null
+    adminDb.from.mockImplementationOnce(() => {
+      const chain = makeChain({ data: null, error: null })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(chain as any).upsert = vi.fn((rows: unknown) => {
+        const arr = rows as Array<{ start_prob: number }>
+        if (arr?.length) capturedFields = arr[0]
+        return chain
+      })
+      return chain
+    })
+
+    mockApiFootball.mockResolvedValueOnce([{
+      player: { id: 999, name: 'Haaland', nationality: 'Norway' },
+      statistics: [{
+        games: { position: 'Forward', number: 9, appearences: 2, minutes: 180 },
+        goals: { total: 1, assists: 0 },
+        team: { id: 10 },
+      }],
+    }])
+
+    const res = await GET(makeRequest({ step: 'qualifiers' }))
+    expect(res.status).toBe(200)
+    expect(capturedFields).not.toBeNull()
+    // Shrinkage pulls the result below 0.97 (formula: (4*shirtPrior + 2*1.0) / 6)
+    expect(capturedFields!.start_prob).toBeLessThan(0.97)
+    expect(capturedFields!.start_prob).toBeGreaterThan(0.10)
+  })
+
+  it('elite-scoring FWD gets personal_attack above team attack', async () => {
+    // Norway team attack = 0.80 (lib/teamStrength.ts).
+    // 8 goals + 2 assists in 10 games → personal_attack should be clamped at 0.97.
+    const adminDb = setupAdminDb()
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 1, name: 'Norway', api_team_id: 10 }] }))
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [] })) // allGroupFx
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 50, api_player_id: 999, position: 'FWD' }] }))
+
+    let capturedFields: { personal_attack: number | null } | null = null
+    adminDb.from.mockImplementationOnce(() => {
+      const chain = makeChain({ data: null, error: null })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(chain as any).upsert = vi.fn((rows: unknown) => {
+        const arr = rows as Array<{ personal_attack: number | null }>
+        if (arr?.length) capturedFields = arr[0]
+        return chain
+      })
+      return chain
+    })
+
+    mockApiFootball.mockResolvedValueOnce([{
+      player: { id: 999, name: 'Haaland', nationality: 'Norway' },
+      statistics: [{
+        games: { position: 'Forward', number: 9, appearences: 10, minutes: 900 },
+        goals: { total: 8, assists: 2 },
+        team: { id: 10 },
+      }],
+    }])
+
+    const res = await GET(makeRequest({ step: 'qualifiers' }))
+    expect(res.status).toBe(200)
+    expect(capturedFields).not.toBeNull()
+    const pa = capturedFields!.personal_attack
+    expect(pa).not.toBeNull()
+    expect(pa!).toBeGreaterThan(0.80) // Norway team attack
+    expect(pa!).toBeLessThanOrEqual(0.97)
+  })
+
+  it('GK gets null personal_attack in upsert', async () => {
+    const adminDb = setupAdminDb()
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 1, name: 'Norway', api_team_id: 10 }] }))
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [] })) // allGroupFx
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 51, api_player_id: 888, position: 'GK' }] }))
+
+    let capturedFields: { personal_attack: number | null } | null = null
+    adminDb.from.mockImplementationOnce(() => {
+      const chain = makeChain({ data: null, error: null })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(chain as any).upsert = vi.fn((rows: unknown) => {
+        const arr = rows as Array<{ personal_attack: number | null }>
+        if (arr?.length) capturedFields = arr[0]
+        return chain
+      })
+      return chain
+    })
+
+    mockApiFootball.mockResolvedValueOnce([{
+      player: { id: 888, name: 'Keeper', nationality: 'Norway' },
+      statistics: [{
+        games: { position: 'Goalkeeper', number: 1, appearences: 8, minutes: 720 },
+        goals: { total: 0, assists: 0 },
+        team: { id: 10 },
+      }],
+    }])
+
+    const res = await GET(makeRequest({ step: 'qualifiers' }))
+    expect(res.status).toBe(200)
+    expect(capturedFields).not.toBeNull()
+    expect(capturedFields!.personal_attack).toBeNull()
+  })
+
   it('startProb clamped to [0.10, 0.97] for 100% start rate', async () => {
     const adminDb = setupAdminDb()
     adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 1, name: 'France', api_team_id: 10 }] }))
     adminDb.from.mockReturnValueOnce(makeChain({ data: [] })) // GROUP fixtures (none)
     adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 50, api_player_id: 100, position: 'FWD' }] }))
 
-    let capturedRows: Array<{ start_prob: number }> | null = null
+    let capturedFields: { start_prob: number } | null = null
     adminDb.from.mockImplementationOnce(() => {
       const chain = makeChain({ data: null, error: null })
-      // Intercept upsert to capture the rows. makeChain methods return self, so we do the same.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(chain as any).upsert = vi.fn((...args: unknown[]) => {
-        if (Array.isArray(args[0])) capturedRows = args[0] as Array<{ start_prob: number }>
+      ;(chain as any).upsert = vi.fn((rows: unknown) => {
+        const arr = rows as Array<{ start_prob: number }>
+        if (arr?.length) capturedFields = arr[0]
         return chain
       })
       return chain
@@ -168,19 +276,15 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
     mockApiFootball.mockResolvedValueOnce([{
       player: { id: 100, name: 'Starter', nationality: 'France' },
       statistics: [{
-        games: { position: 'Forward', number: 9, appearences: 10, minutes: 900 }, // 100% → clamp to 0.97
+        games: { position: 'Forward', number: 9, appearences: 10, minutes: 900 }, // 100% start rate
         team: { id: 10 },
       }],
     }])
 
     const res = await GET(makeRequest({ step: 'qualifiers' }))
     expect(res.status).toBe(200)
-    const captured = capturedRows as Array<{ start_prob: number }> | null
-    if (captured) {
-      for (const row of captured) {
-        expect(row.start_prob).toBeGreaterThanOrEqual(0.10)
-        expect(row.start_prob).toBeLessThanOrEqual(0.97)
-      }
-    }
+    expect(capturedFields).not.toBeNull()
+    expect(capturedFields!.start_prob).toBeGreaterThanOrEqual(0.10)
+    expect(capturedFields!.start_prob).toBeLessThanOrEqual(0.97)
   })
 })

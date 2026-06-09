@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { projectedPointsPerMatch, projectedPoints, priceFromExpectedPoints } from '@/lib/projection'
+import { projectedPointsPerMatch, projectedPoints, priceFromExpectedPoints, derivePersonalAttack } from '@/lib/projection'
 import type { ProjectionInput } from '@/lib/projection'
 
 const base = (): ProjectionInput => ({
@@ -159,6 +159,119 @@ describe('priceFromExpectedPoints — monotonicity', () => {
         const curr = priceFromExpectedPoints(pos, v)
         expect(curr).toBeGreaterThanOrEqual(prev)
         prev = curr
+      }
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// projectedPointsPerMatch — personalAttack field
+// ---------------------------------------------------------------------------
+describe('projectedPointsPerMatch — personalAttack', () => {
+  it('personalAttack raises FWD projection above team attack', () => {
+    const input: ProjectionInput = {
+      pos: 'FWD', attack: 0.6, defense: 0.6, startProb: 0.9, matchesExpected: 1,
+    }
+    const withTeam     = projectedPointsPerMatch(input)
+    const withPersonal = projectedPointsPerMatch({ ...input, personalAttack: 0.95 })
+    expect(withPersonal).toBeGreaterThan(withTeam)
+  })
+
+  it('personalAttack on GK has negligible effect (goal/assist rates are near zero)', () => {
+    const input: ProjectionInput = {
+      pos: 'GK', attack: 0.5, defense: 0.8, startProb: 0.9, matchesExpected: 1, opponentAttack: 0.55,
+    }
+    const without = projectedPointsPerMatch(input)
+    const with_   = projectedPointsPerMatch({ ...input, personalAttack: 0.97 })
+    expect(Math.abs(with_ - without)).toBeLessThan(0.05)
+  })
+
+  it('undefined personalAttack behaves identically to omitting it', () => {
+    const input: ProjectionInput = {
+      pos: 'FWD', attack: 0.7, defense: 0.7, startProb: 0.9, matchesExpected: 1,
+    }
+    expect(projectedPointsPerMatch(input)).toBeCloseTo(
+      projectedPointsPerMatch({ ...input, personalAttack: undefined })
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// FWD calibration: FWD should price above DEF on same team
+// ---------------------------------------------------------------------------
+describe('projectedPointsPerMatch — FWD > DEF calibration', () => {
+  it('FWD starter projects higher per-match xPts than DEF starter on the same team', () => {
+    const team = { attack: 0.75, defense: 0.70 }
+    const fwd = projectedPointsPerMatch({ pos: 'FWD', ...team, startProb: 0.80, matchesExpected: 1 })
+    const def = projectedPointsPerMatch({ pos: 'DEF', ...team, startProb: 0.80, matchesExpected: 1 })
+    expect(fwd).toBeGreaterThan(def)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// derivePersonalAttack
+// ---------------------------------------------------------------------------
+describe('derivePersonalAttack', () => {
+  it('returns null for GK', () => {
+    expect(derivePersonalAttack('GK', 0.8, {
+      totalGoals: 2, totalAssists: 1, totalMinutes: 900, totalAppearances: 10,
+    })).toBeNull()
+  })
+
+  it('returns null for DEF', () => {
+    expect(derivePersonalAttack('DEF', 0.8, {
+      totalGoals: 1, totalAssists: 2, totalMinutes: 900, totalAppearances: 10,
+    })).toBeNull()
+  })
+
+  it('returns null when totalMinutes is 0', () => {
+    expect(derivePersonalAttack('FWD', 0.8, {
+      totalGoals: 0, totalAssists: 0, totalMinutes: 0, totalAppearances: 0,
+    })).toBeNull()
+  })
+
+  it('elite scorer: result clamped to 0.97', () => {
+    // 10 goals in 900 min = 1.0 g/90, far above model rate → implied >> 1.0 → clamps
+    const result = derivePersonalAttack('FWD', 0.55, {
+      totalGoals: 10, totalAssists: 0, totalMinutes: 900, totalAppearances: 10,
+    })
+    expect(result).toBe(0.97)
+  })
+
+  it('zero scorer: personal_attack below team attack (implied=0 shrinks result below team rating)', () => {
+    const result = derivePersonalAttack('FWD', 0.8, {
+      totalGoals: 0, totalAssists: 0, totalMinutes: 900, totalAppearances: 10,
+    })
+    expect(result).not.toBeNull()
+    expect(result!).toBeLessThan(0.8)
+    expect(result!).toBeGreaterThanOrEqual(0.10)
+  })
+
+  it('1 goal in 1 minute does not clamp personal_attack (minutes-based shrinkage)', () => {
+    // With appearances as sample weight: n=1, implied≈169 → clamped to 0.97.
+    // With minutes/90 as sample weight: n=1/90≈0.011, n*implied stays ≈constant
+    // (totalGoals*goalPts/modelRate), denominator ≈8 → result ≈0.73 — no clamp.
+    const result = derivePersonalAttack('FWD', 0.5, {
+      totalGoals: 1, totalAssists: 0, totalMinutes: 1, totalAppearances: 1,
+    })
+    expect(result).not.toBeNull()
+    expect(result!).toBeLessThan(0.97)
+    expect(result!).toBeGreaterThan(0.10)
+  })
+
+  it('result is always in [0.10, 0.97]', () => {
+    const cases: Array<[number, number, number, number]> = [
+      [0, 0, 90, 1],
+      [5, 2, 450, 5],
+      [20, 10, 900, 10],
+    ]
+    for (const [g, a, min, apps] of cases) {
+      const r = derivePersonalAttack('FWD', 0.7, {
+        totalGoals: g, totalAssists: a, totalMinutes: min, totalAppearances: apps,
+      })
+      if (r !== null) {
+        expect(r).toBeGreaterThanOrEqual(0.10)
+        expect(r).toBeLessThanOrEqual(0.97)
       }
     }
   })
