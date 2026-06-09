@@ -147,7 +147,10 @@ export function derivePersonalAttack(
   const implied  = ptsPer90 / modelRate
 
   // Shrink toward team attack: need strong evidence to deviate from team rating.
+  // Use minutes/90 (full-game equivalents) as sample size so short cameos (high
+  // per-90 rate from tiny minutes) don't drive personal_attack to the clamp.
   const w = 8
-  const shrunk = (w * teamAttack + observed.totalAppearances * implied) / (w + observed.totalAppearances)
+  const n = observed.totalMinutes / 90
+  const shrunk = (w * teamAttack + n * implied) / (w + n)
   return Math.min(0.97, Math.max(0.10, shrunk))
 }

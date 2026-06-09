@@ -247,6 +247,18 @@ describe('derivePersonalAttack', () => {
     expect(result!).toBeGreaterThanOrEqual(0.10)
   })
 
+  it('1 goal in 1 minute does not clamp personal_attack (minutes-based shrinkage)', () => {
+    // With appearances as sample weight: n=1, implied≈169 → clamped to 0.97.
+    // With minutes/90 as sample weight: n=1/90≈0.011, n*implied stays ≈constant
+    // (totalGoals*goalPts/modelRate), denominator ≈8 → result ≈0.73 — no clamp.
+    const result = derivePersonalAttack('FWD', 0.5, {
+      totalGoals: 1, totalAssists: 0, totalMinutes: 1, totalAppearances: 1,
+    })
+    expect(result).not.toBeNull()
+    expect(result!).toBeLessThan(0.97)
+    expect(result!).toBeGreaterThan(0.10)
+  })
+
   it('result is always in [0.10, 0.97]', () => {
     const cases: Array<[number, number, number, number]> = [
       [0, 0, 90, 1],
