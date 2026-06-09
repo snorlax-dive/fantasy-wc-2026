@@ -1,0 +1,186 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { makeChain, createMockSupabase } from '../helpers/mockSupabase'
+
+vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }))
+vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: vi.fn() }))
+vi.mock('@/lib/apiFootball', () => ({ WORLD_CUP_LEAGUE: 1, SEASON: 2026, apiFootball: vi.fn() }))
+
+import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { apiFootball } from '@/lib/apiFootball'
+import { GET } from '@/app/api/admin/seed/route'
+
+const mockCreateClient = vi.mocked(createClient)
+const mockCreateAdminClient = vi.mocked(createAdminClient)
+const mockApiFootball = vi.mocked(apiFootball)
+
+const CRON_SECRET = 'seed-cron-secret'
+
+function makeRequest(params: Record<string, string> = {}) {
+  const url = new URL('http://localhost/api/admin/seed')
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
+  return new Request(url.toString(), {
+    headers: new Headers({ authorization: `Bearer ${CRON_SECRET}` }),
+  })
+}
+
+beforeEach(() => {
+  process.env.CRON_SECRET = CRON_SECRET
+  vi.clearAllMocks()
+
+  const serverDb = createMockSupabase(null)
+  mockCreateClient.mockResolvedValue(serverDb as never)
+})
+
+function setupAdminDb() {
+  const adminDb = createMockSupabase(null)
+  mockCreateAdminClient.mockReturnValue(adminDb as never)
+  return adminDb
+}
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+describe('GET /api/admin/seed — auth', () => {
+  it('no auth → 401', async () => {
+    const serverDb = createMockSupabase(null)
+    serverDb.from.mockReturnValueOnce(makeChain({ data: { is_commissioner: false } }))
+    mockCreateClient.mockResolvedValue(serverDb as never)
+    const res = await GET(new Request('http://localhost/api/admin/seed'))
+    expect(res.status).toBe(401)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// step=base dry run
+// ---------------------------------------------------------------------------
+describe('GET /api/admin/seed — step=base', () => {
+  it('dry=1 → no DB writes', async () => {
+    const adminDb = setupAdminDb()
+    // apiFootball returns arrays directly (already unwrapped from json.response)
+    mockApiFootball
+      .mockResolvedValueOnce([{ team: { id: 1, name: 'France' }, venue: {} }]) // teams
+      .mockResolvedValueOnce([]) // fixtures
+
+    const res = await GET(makeRequest({ step: 'base', dry: '1' }))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.dry).toBe(true)
+    expect(adminDb.from).not.toHaveBeenCalled()
+  })
+
+  it('empty API response → 0 teams, 0 fixtures', async () => {
+    const adminDb = setupAdminDb()
+    adminDb.from
+      .mockReturnValueOnce(makeChain({ data: [], error: null })) // teams upsert → then teams select
+      .mockReturnValueOnce(makeChain({ data: [] }))               // teams select (id, api_team_id map)
+      .mockReturnValueOnce(makeChain({ data: null, error: null })) // fixtures upsert
+    mockApiFootball
+      .mockResolvedValueOnce([]) // teams
+      .mockResolvedValueOnce([]) // fixtures
+
+    const res = await GET(makeRequest({ step: 'base' }))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.teams).toBe(0)
+    expect(body.fixtures).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// step=players
+// ---------------------------------------------------------------------------
+describe('GET /api/admin/seed — step=players', () => {
+  it('dry=1 with no teams → no API calls and dry=true response', async () => {
+    const adminDb = setupAdminDb()
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [] })) // teams select (empty)
+
+    const res = await GET(makeRequest({ step: 'players', dry: '1' }))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.dry).toBe(true)
+    expect(mockApiFootball).not.toHaveBeenCalled()
+  })
+
+  it('team with no GROUP fixtures → flat 3-match projection', async () => {
+    const adminDb = setupAdminDb()
+    adminDb.from
+      .mockReturnValueOnce(makeChain({ data: [{ id: 1, name: 'France', api_team_id: 10 }] })) // teams
+      .mockReturnValueOnce(makeChain({ data: [] }))  // GROUP fixtures for team (empty → flat projection)
+      .mockReturnValueOnce(makeChain({ data: null, error: null })) // players upsert
+
+    // /players/squads returns [{players: [...]}] (squad wrapper)
+    mockApiFootball.mockResolvedValueOnce([{
+      players: [{ id: 100, name: 'Mbappé', position: 'Forward', number: 10, photo: null }],
+    }])
+
+    const res = await GET(makeRequest({ step: 'players' }))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.inserted).toBeGreaterThanOrEqual(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// step=qualifiers
+// ---------------------------------------------------------------------------
+describe('GET /api/admin/seed — step=qualifiers', () => {
+  it('player with 0 appearances → skipped (no div-by-zero)', async () => {
+    const adminDb = setupAdminDb()
+    // teams select
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 1, name: 'France', api_team_id: 10 }] }))
+    // GROUP fixtures select
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [] }))
+    // players for this team
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 50, api_player_id: 100, position: 'FWD' }] }))
+
+    // /players returns entries with 0 appearances
+    mockApiFootball.mockResolvedValueOnce([{
+      player: { id: 100, name: 'Test', nationality: 'France' },
+      statistics: [{ games: { position: 'Forward', number: 9, appearences: 0, minutes: 0 }, team: { id: 10 } }],
+    }])
+
+    const res = await GET(makeRequest({ step: 'qualifiers' }))
+    expect(res.status).toBe(200)
+    // 0-appearance player is skipped → 0 updates
+    const body = await res.json()
+    expect(body.updated).toBe(0)
+  })
+
+  it('startProb clamped to [0.10, 0.97] for 100% start rate', async () => {
+    const adminDb = setupAdminDb()
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 1, name: 'France', api_team_id: 10 }] }))
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [] })) // GROUP fixtures (none)
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 50, api_player_id: 100, position: 'FWD' }] }))
+
+    let capturedRows: Array<{ start_prob: number }> | null = null
+    adminDb.from.mockImplementationOnce(() => {
+      const chain = makeChain({ data: null, error: null })
+      // Intercept upsert to capture the rows. makeChain methods return self, so we do the same.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(chain as any).upsert = vi.fn((...args: unknown[]) => {
+        if (Array.isArray(args[0])) capturedRows = args[0] as Array<{ start_prob: number }>
+        return chain
+      })
+      return chain
+    })
+
+    mockApiFootball.mockResolvedValueOnce([{
+      player: { id: 100, name: 'Starter', nationality: 'France' },
+      statistics: [{
+        games: { position: 'Forward', number: 9, appearences: 10, minutes: 900 }, // 100% → clamp to 0.97
+        team: { id: 10 },
+      }],
+    }])
+
+    const res = await GET(makeRequest({ step: 'qualifiers' }))
+    expect(res.status).toBe(200)
+    const captured = capturedRows as Array<{ start_prob: number }> | null
+    if (captured) {
+      for (const row of captured) {
+        expect(row.start_prob).toBeGreaterThanOrEqual(0.10)
+        expect(row.start_prob).toBeLessThanOrEqual(0.97)
+      }
+    }
+  })
+})

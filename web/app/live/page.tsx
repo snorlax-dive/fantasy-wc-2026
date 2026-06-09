@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,19 +12,18 @@ export default async function LivePage() {
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const admin = createAdminClient()
-  const { data: settingsRows } = await admin.from('settings').select('key, value')
+  const { data: settingsRows } = await supabase.from('settings').select('key, value')
   const settings = Object.fromEntries((settingsRows ?? []).map((r: any) => [r.key, r.value]))
   const stage = (settings['current_stage'] as string) ?? 'GROUP'
   const capMult = Number(settings['captain_multiplier'] ?? 2)
 
   // Live fixtures
-  const { data: liveFx } = await admin
+  const { data: liveFx } = await supabase
     .from('fixtures')
     .select('id, team_a, team_b, score_a, score_b')
     .eq('status', 'LIVE')
   const liveIds = (liveFx ?? []).map((f: any) => f.id)
-  const { data: teams } = await admin.from('teams').select('id, name')
+  const { data: teams } = await supabase.from('teams').select('id, name')
   const teamName = new Map<number, string>((teams ?? []).map((t: any) => [t.id, t.name]))
   // team_id -> the live fixture it's playing in
   const liveByTeam = new Map<number, any>()
@@ -48,13 +46,13 @@ export default async function LivePage() {
     const pids = (sps ?? []).map((s: any) => s.player_id)
     const captainOf = new Map((sps ?? []).map((s: any) => [s.player_id, s.is_captain]))
     const [{ data: pl }, { data: stats }, { data: tc }] = await Promise.all([
-      admin.from('players').select('id, name, position, team_id').in('id', pids.length ? pids : [-1]),
-      admin
+      supabase.from('players').select('id, name, position, team_id').in('id', pids.length ? pids : [-1]),
+      supabase
         .from('player_match_stats')
         .select('player_id, fantasy_points, goals, minutes')
         .in('fixture_id', liveIds.length ? liveIds : [-1])
         .in('player_id', pids.length ? pids : [-1]),
-      admin.from('chip_uses').select('stage').eq('user_id', user.id).eq('chip', 'TRIPLE_CAPTAIN').eq('stage', stage),
+      supabase.from('chip_uses').select('stage').eq('user_id', user.id).eq('chip', 'TRIPLE_CAPTAIN').eq('stage', stage),
     ])
     tcUsed = (tc ?? []).length > 0
     const statBy = new Map<number, any>((stats ?? []).map((s: any) => [s.player_id, s]))

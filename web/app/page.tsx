@@ -53,6 +53,7 @@ export default async function Home() {
     .maybeSingle()
   const name = profile?.team_name || profile?.display_name || user.email
 
+  // squads spans all users — RLS restricts to own rows, so admin required for league-wide view.
   const admin = createAdminClient()
   const [
     { data: lb },
@@ -65,16 +66,16 @@ export default async function Home() {
     { data: teams },
   ] = await Promise.all([
     supabase.rpc('get_leaderboard'),
-    admin.from('profiles').select('id, display_name, team_name, crest, color'),
+    supabase.from('profiles').select('id, display_name, team_name, crest, color'),
     admin.from('squads').select('user_id, stage, fantasy_points').gt('fantasy_points', 0),
-    admin.from('blocks').select('blocker, target, player_id, stage').eq('revealed', true).limit(8),
-    admin.from('player_match_stats').select('player_id, fantasy_points').order('fantasy_points', { ascending: false }).limit(6),
-    admin.from('settings').select('key, value'),
-    admin
+    supabase.from('blocks').select('blocker, target, player_id, stage').eq('revealed', true).limit(8),
+    supabase.from('player_match_stats').select('player_id, fantasy_points').order('fantasy_points', { ascending: false }).limit(6),
+    supabase.from('settings').select('key, value'),
+    supabase
       .from('fixtures')
       .select('id, stage, kickoff, team_a, team_b, status, score_a, score_b')
       .order('kickoff', { ascending: true }),
-    admin.from('teams').select('id, name'),
+    supabase.from('teams').select('id, name'),
   ])
 
   const pById = new Map((profs ?? []).map((p: any) => [p.id, p]))
@@ -84,7 +85,7 @@ export default async function Home() {
   const currentStage = (settings['current_stage'] as string) ?? 'GROUP'
   const teamName = new Map<number, string>((teams ?? []).map((t: any) => [t.id, t.name]))
   const lockISO = (fixtures ?? []).find((f: any) => f.stage === currentStage)?.kickoff ?? null
-  const nowMs = Date.now()
+  const nowMs = new Date().getTime()
   const upcoming = (fixtures ?? [])
     .filter((f: any) => f.status !== 'LIVE' && new Date(f.kickoff).getTime() > nowMs)
     .slice(0, 5)
@@ -160,7 +161,7 @@ export default async function Home() {
   const allPlayerIds = [...new Set([...haulIds, ...blockPlayerIds])]
   const playerNames = new Map<number, string>()
   if (allPlayerIds.length) {
-    const { data: pl } = await admin.from('players').select('id, name').in('id', allPlayerIds)
+    const { data: pl } = await supabase.from('players').select('id, name').in('id', allPlayerIds)
     for (const p of pl ?? []) playerNames.set(p.id as number, p.name as string)
   }
   const hauls = (topStats ?? []).filter((s: any) => s.fantasy_points > 0).slice(0, 5)

@@ -1,5 +1,6 @@
 'use server'
 
+import { timingSafeEqual } from 'crypto'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -34,7 +35,12 @@ export async function requestMagicLink(
   if (isNew && !signupsOpen) {
     return { error: 'Sign-ups are closed for this league.' }
   }
-  if (isNew && invite !== process.env.INVITE_CODE) {
+  const expected = process.env.INVITE_CODE ?? ''
+  const inviteBuf = Buffer.from(invite)
+  const expectedBuf = Buffer.from(expected)
+  const inviteValid =
+    inviteBuf.length === expectedBuf.length && timingSafeEqual(inviteBuf, expectedBuf)
+  if (isNew && !inviteValid) {
     return { error: 'First time here? Enter the league invite code to join.' }
   }
 

@@ -33,7 +33,7 @@ async function authorized(req: Request): Promise<boolean> {
   return data?.is_commissioner === true
 }
 
-async function chunkedUpsert(db: any, table: string, rows: any[], onConflict: string) {
+async function chunkedUpsert(db: ReturnType<typeof createAdminClient>, table: string, rows: Record<string, unknown>[], onConflict: string) {
   for (let i = 0; i < rows.length; i += 500) {
     const { error } = await db.from(table).upsert(rows.slice(i, i + 500), { onConflict })
     if (error) throw error
@@ -206,7 +206,7 @@ export async function GET(req: Request) {
     for (const s of allStats) goalsByPlayer.set(s.player_id, (goalsByPlayer.get(s.player_id) ?? 0) + s.goals)
     let goldenBoot: number | null = null
     let maxGoals = 0
-    for (const [pid, g] of goalsByPlayer) if (g > maxGoals) ((maxGoals = g), (goldenBoot = pid))
+    for (const [pid, g] of goalsByPlayer) { if (g > maxGoals) { maxGoals = g; goldenBoot = pid } }
 
     const { data: bpicks } = await db
       .from('bracket_picks')

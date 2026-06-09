@@ -13,7 +13,7 @@ export function ShareCard() {
       if (!res.ok) throw new Error('Could not build card')
       const blob = await res.blob()
       const file = new File([blob], 'fantasy-wc-recap.png', { type: 'image/png' })
-      const nav = navigator as Navigator & { canShare?: (d: any) => boolean }
+      const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean }
       if (nav.canShare && nav.canShare({ files: [file] })) {
         await nav.share({ files: [file], title: 'My Fantasy WC round' })
       } else {

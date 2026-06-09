@@ -16,15 +16,15 @@ export default async function ManagersPage() {
   if (!prof?.is_commissioner) redirect('/')
 
   const admin = createAdminClient()
-  const { data: settingsRows } = await admin.from('settings').select('key, value')
+  const { data: settingsRows } = await supabase.from('settings').select('key, value')
   const settings = Object.fromEntries((settingsRows ?? []).map((r: any) => [r.key, r.value]))
   const stage = (settings['current_stage'] as string) ?? 'GROUP'
   const squadSize = Number(settings['squad_size'] ?? 11)
 
   const [{ data: profiles }, { data: fixtures }, { data: squads }, { data: preds }, { data: brackets }] =
     await Promise.all([
-      admin.from('profiles').select('id, team_name, display_name, crest, color'),
-      admin.from('fixtures').select('id, stage'),
+      supabase.from('profiles').select('id, team_name, display_name, crest, color'),
+      supabase.from('fixtures').select('id, stage'),
       admin.from('squads').select('id, user_id').eq('stage', stage),
       admin.from('predictions').select('user_id, fixture_id'),
       admin.from('bracket_picks').select('user_id'),
@@ -47,7 +47,7 @@ export default async function ManagersPage() {
   // Emails (best-effort) to spot who hasn't joined / confirm address.
   const emailById = new Map<string, string>()
   try {
-    const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 })
+    const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 })
     for (const u of data?.users ?? []) if (u.email) emailById.set(u.id, u.email)
   } catch {
     /* ignore */

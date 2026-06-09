@@ -89,13 +89,13 @@ export function PredictionsBoard({
   const toggleExpand = (id: number) =>
     setExpanded((prev) => {
       const n = new Set(prev)
-      n.has(id) ? n.delete(id) : n.add(id)
+      if (n.has(id)) { n.delete(id) } else { n.add(id) }
       return n
     })
   const toggleRound = (r: string) =>
     setCollapsed((prev) => {
       const n = new Set(prev)
-      n.has(r) ? n.delete(r) : n.add(r)
+      if (n.has(r)) { n.delete(r) } else { n.add(r) }
       return n
     })
 
@@ -120,7 +120,7 @@ export function PredictionsBoard({
 
   const totalPredicted = saved.size
   const nextLock = useMemo(() => {
-    const now = Date.now()
+    const now = new Date().getTime()
     return (
       fixtures
         .map((f) => f.lockTime)

@@ -36,6 +36,12 @@ export function CommishPanel({
   const [pending, start] = useTransition()
   const [log, setLog] = useState<string[]>([])
 
+  // The stage a re-draft would open into next — re-pricing should target this
+  // one, ahead of advancing the round.
+  const stageOrder = STAGES.map((s) => s.v)
+  const nextStage = stageOrder[Math.min(stageOrder.indexOf(stage) + 1, stageOrder.length - 1)]
+  const nextStageLabel = STAGES.find((s) => s.v === nextStage)?.label ?? nextStage
+
   function toggleLock() {
     start(async () => {
       const res = await setTournamentLock(!locked)
@@ -191,8 +197,8 @@ export function CommishPanel({
           Current round: <span className="text-cro-red">{stage}</span>
         </h2>
         <p className="mt-1 text-xs text-slate-500">
-          Advancing the round opens re-draft + blocks for that stage. Re-seed fixtures first so the new
-          matchups exist.
+          Advancing the round opens re-draft + blocks for that stage. Re-seed fixtures and re-price
+          players for the next stage first, so the new matchups and budgets are ready before managers draft.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           {STAGES.map((s) => (
@@ -209,6 +215,27 @@ export function CommishPanel({
               {s.label}
             </button>
           ))}
+        </div>
+        <div className="mt-3 border-t border-slate-200 pt-3">
+          <h3 className="text-xs font-bold uppercase tracking-wide text-slate-400">
+            Re-price players for {nextStageLabel}
+          </h3>
+          <p className="mt-1 text-xs text-slate-500">
+            Recomputes price + projected points from each player&apos;s pre-tournament projection blended
+            with their form so far this tournament. Preview before committing — it overwrites prices.
+          </p>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <Op
+              label={`Preview re-price (${nextStageLabel})`}
+              onClick={() => runOp(`reprice preview ${nextStage}`, `/api/admin/reprice?stage=${nextStage}&dry=1`)}
+              pending={pending}
+            />
+            <Op
+              label={`Re-price now (${nextStageLabel})`}
+              onClick={() => runOp(`reprice ${nextStage}`, `/api/admin/reprice?stage=${nextStage}`)}
+              pending={pending}
+            />
+          </div>
         </div>
       </section>
 
@@ -227,7 +254,7 @@ export function CommishPanel({
       <section className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
         <h2 className="text-sm font-bold text-cro-navy">Email notifications</h2>
         <p className="mt-1 text-xs text-slate-500">
-          Lock reminders go out automatically ~6h before each round locks (only to managers who haven't set a
+          Lock reminders go out automatically ~6h before each round locks (only to managers who haven&apos;t set a
           squad). Use these to send manually.
         </p>
         <div className="mt-3 grid grid-cols-2 gap-2">

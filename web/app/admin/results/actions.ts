@@ -25,6 +25,12 @@ export async function saveFixtureResult(input: ResultInput): Promise<{ ok?: bool
   const { supabase, ok } = await requireCommissioner()
   if (!ok) return { error: 'Commissioner only.' }
 
+  if (input.finished) {
+    if (input.scoreA == null || input.scoreB == null) return { error: 'Scores required when marking finished.' }
+    if (!Number.isInteger(input.scoreA) || !Number.isInteger(input.scoreB)) return { error: 'Scores must be integers.' }
+    if (input.scoreA < 0 || input.scoreB < 0 || input.scoreA > 20 || input.scoreB > 20) return { error: 'Scores out of range.' }
+  }
+
   const patch: Record<string, any> = {
     score_a: input.scoreA,
     score_b: input.scoreB,
@@ -85,9 +91,14 @@ export async function savePlayerStat(input: StatInput): Promise<{ ok?: boolean; 
     goals: input.goals,
     own_goals: existing?.own_goals ?? 0,
     red_card: input.redCard,
+    yellow_card: existing?.yellow_card ?? false,
     pens_saved: existing?.pens_saved ?? 0,
     pens_missed: existing?.pens_missed ?? 0,
     clean_sheet: input.cleanSheet,
+    assists: existing?.assists ?? 0,
+    saves: existing?.saves ?? 0,
+    tackles: existing?.tackles ?? 0,
+    interceptions: existing?.interceptions ?? 0,
     fantasy_points: existing?.fantasy_points ?? 0, // recompute (score?force=1) fixes points
   }
   const { error } = await supabase.from('player_match_stats').upsert(row, { onConflict: 'fixture_id,player_id' })

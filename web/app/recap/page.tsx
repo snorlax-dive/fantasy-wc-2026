@@ -23,10 +23,8 @@ export default async function RecapPage() {
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const admin = createAdminClient()
-
   // Pick the most recently played round (latest kickoff among finished fixtures).
-  const { data: finishedFx } = await admin
+  const { data: finishedFx } = await supabase
     .from('fixtures')
     .select('id, stage, kickoff')
     .eq('finished', true)
@@ -47,7 +45,7 @@ export default async function RecapPage() {
   const stageFxIds = finishedFx.filter((f: any) => f.stage === stage).map((f: any) => f.id)
 
   const settings = Object.fromEntries(
-    ((await admin.from('settings').select('key, value')).data ?? []).map((r: any) => [r.key, r.value])
+    ((await supabase.from('settings').select('key, value')).data ?? []).map((r: any) => [r.key, r.value])
   )
   const capMult = Number(settings['captain_multiplier'] ?? 2)
 
@@ -68,16 +66,17 @@ export default async function RecapPage() {
     const pids = (sps ?? []).map((s: any) => s.player_id)
     const captainOf = new Map((sps ?? []).map((s: any) => [s.player_id, s.is_captain]))
 
+    // players/pms/chip_uses/own blocks/own shields all readable via RLS without admin.
     const [{ data: pl }, { data: stats }, { data: tc }, { data: blocksOnMe }, { data: myShield }] = await Promise.all([
-      admin.from('players').select('id, name, position').in('id', pids.length ? pids : [-1]),
-      admin
+      supabase.from('players').select('id, name, position').in('id', pids.length ? pids : [-1]),
+      supabase
         .from('player_match_stats')
         .select('player_id, fantasy_points')
         .in('fixture_id', stageFxIds.length ? stageFxIds : [-1])
         .in('player_id', pids.length ? pids : [-1]),
-      admin.from('chip_uses').select('stage').eq('user_id', user.id).eq('chip', 'TRIPLE_CAPTAIN').eq('stage', stage),
-      admin.from('blocks').select('player_id').eq('target', user.id).eq('stage', stage).eq('revealed', true),
-      admin.from('shield_uses').select('stage').eq('user_id', user.id).eq('stage', stage).maybeSingle(),
+      supabase.from('chip_uses').select('stage').eq('user_id', user.id).eq('chip', 'TRIPLE_CAPTAIN').eq('stage', stage),
+      supabase.from('blocks').select('player_id').eq('target', user.id).eq('stage', stage).eq('revealed', true),
+      supabase.from('shield_uses').select('stage').eq('user_id', user.id).eq('stage', stage).maybeSingle(),
     ])
     tcUsed = (tc ?? []).length > 0
     const shielded = Boolean(myShield)
@@ -108,7 +107,8 @@ export default async function RecapPage() {
   const predScored = (preds ?? []).filter((p: any) => (p.points ?? 0) > 0).length
 
   // ----- my blocks (did they land?) -----
-  const { data: myBlocks } = await admin
+  // Own revealed blocks are readable via RLS; cross-user squads/shields below need admin.
+  const { data: myBlocks } = await supabase
     .from('blocks')
     .select('player_id, target')
     .eq('blocker', user.id)
@@ -117,9 +117,10 @@ export default async function RecapPage() {
   let blockResults: { player: string; target: string; landed: boolean }[] = []
   if ((myBlocks ?? []).length) {
     const targetIds = [...new Set((myBlocks ?? []).map((b: any) => b.target))]
+    const admin = createAdminClient()
     const [{ data: tSquads }, { data: tProfiles }, { data: tShields }] = await Promise.all([
       admin.from('squads').select('id, user_id').eq('stage', stage).in('user_id', targetIds),
-      admin.from('profiles').select('id, team_name, display_name').in('id', targetIds),
+      supabase.from('profiles').select('id, team_name, display_name').in('id', targetIds),
       admin.from('shield_uses').select('user_id').eq('stage', stage).in('user_id', targetIds),
     ])
     const userBySquad = new Map((tSquads ?? []).map((s: any) => [s.id, s.user_id]))
@@ -134,7 +135,7 @@ export default async function RecapPage() {
       ownedBy.get(u)!.add(sp.player_id)
     }
     const allBlockPlayerIds = [...new Set((myBlocks ?? []).map((b: any) => b.player_id))]
-    const { data: bpl } = await admin.from('players').select('id, name').in('id', allBlockPlayerIds.length ? allBlockPlayerIds : [-1])
+    const { data: bpl } = await supabase.from('players').select('id, name').in('id', allBlockPlayerIds.length ? allBlockPlayerIds : [-1])
     const bpName = new Map((bpl ?? []).map((p: any) => [p.id, p.name]))
     const tName = new Map((tProfiles ?? []).map((p: any) => [p.id, p.team_name || p.display_name]))
     blockResults = (myBlocks ?? []).map((b: any) => ({

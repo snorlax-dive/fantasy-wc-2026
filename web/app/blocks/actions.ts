@@ -6,12 +6,12 @@ import { createAdminClient } from '@/lib/supabase/admin'
 type Res = { ok?: boolean; error?: string }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-async function stageContext(admin: any) {
-  const { data } = await admin.from('settings').select('key, value')
+async function stageContext(supabase: any) {
+  const { data } = await supabase.from('settings').select('key, value')
   const settings = Object.fromEntries((data ?? []).map((r: any) => [r.key, r.value]))
   const stage = (settings['current_stage'] as string) ?? 'GROUP'
   const shieldsPerUser = Number(settings['shields_per_user'] ?? 2)
-  const { data: fx } = await admin
+  const { data: fx } = await supabase
     .from('fixtures')
     .select('kickoff')
     .eq('stage', stage)
@@ -33,8 +33,7 @@ export async function saveBlock(input: {
   } = await supabase.auth.getUser()
   if (!user) return { error: 'You are not signed in.' }
 
-  const admin = createAdminClient()
-  const { stage, locked } = await stageContext(admin)
+  const { stage, locked } = await stageContext(supabase)
   if (stage === 'GROUP') return { error: 'Blocks open in the knockout rounds.' }
   if (locked) return { error: 'This round is locked — blocks are revealed.' }
 
@@ -43,6 +42,8 @@ export async function saveBlock(input: {
     // Blind block: you don't see their squad — it lands only if they actually
     // picked this player (resolved at scoring). Just check the target is playing
     // this round and the player exists.
+    // Target's squad and player lookup: target squad is cross-user (admin), player is public (supabase).
+    const admin = createAdminClient()
     const { data: sq } = await admin
       .from('squads')
       .select('id')
@@ -50,10 +51,10 @@ export async function saveBlock(input: {
       .eq('stage', stage)
       .maybeSingle()
     if (!sq) return { error: 'That manager has no squad this round yet.' }
-    const { data: pl } = await admin.from('players').select('id').eq('id', input.playerId).maybeSingle()
+    const { data: pl } = await supabase.from('players').select('id').eq('id', input.playerId).maybeSingle()
     if (!pl) return { error: 'Unknown player.' }
 
-    const { error } = await admin
+    const { error } = await supabase
       .from('blocks')
       .upsert(
         { blocker: user.id, stage, target: input.targetUserId, player_id: input.playerId, revealed: false },
@@ -61,7 +62,7 @@ export async function saveBlock(input: {
       )
     if (error) return { error: error.message }
   } else {
-    await admin.from('blocks').delete().eq('blocker', user.id).eq('stage', stage)
+    await supabase.from('blocks').delete().eq('blocker', user.id).eq('stage', stage)
   }
   return { ok: true }
 }
@@ -73,31 +74,30 @@ export async function setShield(input: { use: boolean }): Promise<Res> {
   } = await supabase.auth.getUser()
   if (!user) return { error: 'You are not signed in.' }
 
-  const admin = createAdminClient()
-  const { stage, shieldsPerUser, locked } = await stageContext(admin)
+  const { stage, shieldsPerUser, locked } = await stageContext(supabase)
   if (stage === 'GROUP') return { error: 'Shields are for the knockout rounds.' }
   if (locked) return { error: 'This round is locked.' }
 
   if (input.use) {
-    const { data: existsThis } = await admin
+    const { data: existsThis } = await supabase
       .from('shield_uses')
       .select('id')
       .eq('user_id', user.id)
       .eq('stage', stage)
       .maybeSingle()
     if (!existsThis) {
-      const { count } = await admin
+      const { count } = await supabase
         .from('shield_uses')
         .select('*', { count: 'exact', head: true })
         .eq('user_id', user.id)
       if ((count ?? 0) >= shieldsPerUser) return { error: `No shields left (max ${shieldsPerUser}).` }
     }
-    const { error } = await admin
+    const { error } = await supabase
       .from('shield_uses')
       .upsert({ user_id: user.id, stage }, { onConflict: 'user_id,stage' })
     if (error) return { error: error.message }
   } else {
-    await admin.from('shield_uses').delete().eq('user_id', user.id).eq('stage', stage)
+    await supabase.from('shield_uses').delete().eq('user_id', user.id).eq('stage', stage)
   }
   return { ok: true }
 }

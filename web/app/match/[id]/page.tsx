@@ -27,28 +27,27 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const admin = createAdminClient()
-  const { data: fx } = await admin
+  const { data: fx } = await supabase
     .from('fixtures')
     .select('id, stage, kickoff, team_a, team_b, score_a, score_b, status, finished, had_red_card, winner_team')
     .eq('id', fixtureId)
     .maybeSingle()
   if (!fx) notFound()
 
-  const { data: settingsRows } = await admin.from('settings').select('key, value')
+  const { data: settingsRows } = await supabase.from('settings').select('key, value')
   const settings = Object.fromEntries((settingsRows ?? []).map((r: any) => [r.key, r.value]))
   const tournamentLocked = settings['tournament_locked'] === true
 
-  const { data: teams } = await admin.from('teams').select('id, name')
+  const { data: teams } = await supabase.from('teams').select('id, name')
   const teamName = new Map<number, string>((teams ?? []).map((t: any) => [t.id, t.name]))
   const home = fx.team_a != null ? teamName.get(fx.team_a) ?? 'TBD' : 'TBD'
   const away = fx.team_b != null ? teamName.get(fx.team_b) ?? 'TBD' : 'TBD'
   const live = fx.status === 'LIVE'
-  const kickoffPassed = new Date(fx.kickoff).getTime() <= Date.now()
+  const kickoffPassed = new Date(fx.kickoff).getTime() <= new Date().getTime()
   const revealed = kickoffPassed || tournamentLocked || fx.finished || live
 
   // Per-player stats for this match
-  const { data: pms } = await admin
+  const { data: pms } = await supabase
     .from('player_match_stats')
     .select('player_id, goals, red_card, minutes, fantasy_points')
     .eq('fixture_id', fixtureId)
@@ -68,20 +67,20 @@ export default async function MatchPage({ params }: { params: Promise<{ id: stri
     for (const s of sps ?? []) captainOf.set(s.player_id, s.is_captain)
   }
 
-  // Predictions for this fixture (reveal others only after lock)
-  const { data: predsRaw } = revealed
-    ? await admin.from('predictions').select('user_id, pred_a, pred_b, points, is_banker').eq('fixture_id', fixtureId)
-    : await supabase.from('predictions').select('user_id, pred_a, pred_b, points, is_banker').eq('fixture_id', fixtureId)
-  const preds = predsRaw ?? []
-
-  // Resolve player + manager names
+  // Predictions: own prediction via regular client; others' revealed only after lock (cross-user → admin).
   const statPids = (pms ?? []).map((s: any) => s.player_id)
   const allPids = [...new Set([...statPids, ...myPids])]
-  const { data: pl } = allPids.length
-    ? await admin.from('players').select('id, name, position, team_id').in('id', allPids)
-    : { data: [] as any[] }
+  const [{ data: predsRaw }, { data: pl }, { data: profs }] = await Promise.all([
+    revealed
+      ? createAdminClient().from('predictions').select('user_id, pred_a, pred_b, points, is_banker').eq('fixture_id', fixtureId)
+      : supabase.from('predictions').select('user_id, pred_a, pred_b, points, is_banker').eq('fixture_id', fixtureId),
+    allPids.length
+      ? supabase.from('players').select('id, name, position, team_id').in('id', allPids)
+      : Promise.resolve({ data: [] as any[] }),
+    supabase.from('profiles').select('id, team_name, display_name, crest, color'),
+  ])
+  const preds = predsRaw ?? []
   const playerById = new Map((pl ?? []).map((p: any) => [p.id, p]))
-  const { data: profs } = await admin.from('profiles').select('id, team_name, display_name, crest, color')
   const profById = new Map((profs ?? []).map((p: any) => [p.id, p]))
 
   const statBy = new Map<number, any>((pms ?? []).map((s: any) => [s.player_id, s]))

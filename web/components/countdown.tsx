@@ -7,8 +7,9 @@ import { useEffect, useState } from 'react'
 export function Countdown({ to }: { to: string }) {
   const [now, setNow] = useState<number | null>(null)
   useEffect(() => {
-    setNow(Date.now())
-    const id = setInterval(() => setNow(Date.now()), 1000)
+    const tick = () => setNow(Date.now())
+    tick()
+    const id = setInterval(tick, 1000)
     return () => clearInterval(id)
   }, [])
 
@@ -29,8 +30,9 @@ export function Countdown({ to }: { to: string }) {
 export function RelativeTime({ iso }: { iso: string }) {
   const [now, setNow] = useState<number | null>(null)
   useEffect(() => {
-    setNow(Date.now())
-    const id = setInterval(() => setNow(Date.now()), 30000)
+    const tick = () => setNow(Date.now())
+    tick()
+    const id = setInterval(tick, 30000)
     return () => clearInterval(id)
   }, [])
   if (now === null) return <span>—</span>
@@ -44,7 +46,7 @@ export function RelativeTime({ iso }: { iso: string }) {
 export function LocalTime({ iso }: { iso: string }) {
   const [s, setS] = useState<string | null>(null)
   useEffect(() => {
-    setS(
+    const format = () => setS(
       new Date(iso).toLocaleString(undefined, {
         weekday: 'short',
         month: 'short',
@@ -53,6 +55,7 @@ export function LocalTime({ iso }: { iso: string }) {
         minute: '2-digit',
       })
     )
+    format()
   }, [iso])
   return <span>{s ?? '—'}</span>
 }

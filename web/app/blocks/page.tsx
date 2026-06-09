@@ -23,15 +23,16 @@ export default async function BlocksPage() {
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const admin = createAdminClient()
-  const { data: settingsRows } = await admin.from('settings').select('key, value')
+  // settings, fixtures, profiles, players all have RLS `using (true)` — server client is fine.
+  // Only cross-user squads/squad_players need the admin client.
+  const { data: settingsRows } = await supabase.from('settings').select('key, value')
   const settings = Object.fromEntries((settingsRows ?? []).map((r: any) => [r.key, r.value]))
   const stage = (settings['current_stage'] as string) ?? 'GROUP'
   const perTargetCap = Number(settings['block_per_target_cap'] ?? 2)
   const shieldsPerUser = Number(settings['shields_per_user'] ?? 2)
   const stageOpen = stage !== 'GROUP'
 
-  const { data: firstFx } = await admin
+  const { data: firstFx } = await supabase
     .from('fixtures')
     .select('kickoff')
     .eq('stage', stage)
@@ -43,15 +44,17 @@ export default async function BlocksPage() {
 
   // Managers who have a squad this round = the blockable rivals. We DON'T expose
   // their squads (squads stay secret) — you block "blind" from the full pool.
+  // Cross-user squads/squad_players are restricted by RLS → admin client required.
+  const admin = createAdminClient()
   const { data: squads } = await admin.from('squads').select('id, user_id').eq('stage', stage)
   const squadIds = (squads ?? []).map((s: any) => s.id)
   const { data: sps } =
     squadIds.length > 0
       ? await admin.from('squad_players').select('squad_id, player_id').in('squad_id', squadIds)
       : { data: [] as any[] }
-  const { data: profs } = await admin.from('profiles').select('id, display_name, team_name')
+  const { data: profs } = await supabase.from('profiles').select('id, display_name, team_name')
   const poolRaw = await fetchAll((from, to) =>
-    admin.from('players').select('id, name, position, team:teams(name)').order('name').range(from, to)
+    supabase.from('players').select('id, name, position, team:teams(name)').order('name').range(from, to)
   )
 
   const nameByUser = new Map<string, string>(
@@ -77,19 +80,20 @@ export default async function BlocksPage() {
   })
   const playerNameById = new Map<number, string>(players.map((p) => [p.id, p.name]))
 
-  const { data: myBlock } = await admin
+  // Own blocks/shields and revealed blocks are all readable via RLS without admin.
+  const { data: myBlock } = await supabase
     .from('blocks')
     .select('target, player_id')
     .eq('blocker', user.id)
     .eq('stage', stage)
     .maybeSingle()
-  const { data: myShield } = await admin
+  const { data: myShield } = await supabase
     .from('shield_uses')
     .select('id')
     .eq('user_id', user.id)
     .eq('stage', stage)
     .maybeSingle()
-  const { count: shieldsUsed } = await admin
+  const { count: shieldsUsed } = await supabase
     .from('shield_uses')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', user.id)
@@ -98,7 +102,7 @@ export default async function BlocksPage() {
   // After lock: reveal who blocked whom, and whether it landed.
   let revealed: Revealed[] = []
   if (locked) {
-    const { data: rb } = await admin
+    const { data: rb } = await supabase
       .from('blocks')
       .select('blocker, target, player_id')
       .eq('stage', stage)

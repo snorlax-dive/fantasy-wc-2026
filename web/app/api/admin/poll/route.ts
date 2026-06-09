@@ -123,6 +123,9 @@ export async function GET(req: Request) {
       const winnerTeam = winnerApi != null ? teamByApi.get(winnerApi) ?? null : null
 
       const teamsPlayers = await apiFootball<any>('/fixtures/players', { fixture: f.fixture.id })
+      // API-Football occasionally returns an empty array during or just after a match.
+      // Skip rather than overwriting existing stats with zeros.
+      if (!Array.isArray(teamsPlayers) || teamsPlayers.length === 0) continue
       let hadRed = false
       const statRows: any[] = []
 
@@ -132,21 +135,32 @@ export async function GET(req: Request) {
           const our = plByApi.get(pp.player?.id)
           if (!our) continue
           const st = pp.statistics?.[0] ?? {}
-          const minutes = st.games?.minutes ?? 0
-          const goals = st.goals?.total ?? 0
-          const red = (st.cards?.red ?? 0) > 0
-          const pensSaved = st.penalty?.saved ?? 0
-          const pensMissed = st.penalty?.missed ?? 0
+          const minutes      = st.games?.minutes         ?? 0
+          const goals        = st.goals?.total            ?? 0
+          const assists      = st.goals?.assists          ?? 0
+          const own_goals    = st.goals?.owngoals         ?? 0
+          const saves        = st.goals?.saves            ?? 0
+          const red          = (st.cards?.red             ?? 0) > 0
+          const yellow_card  = (st.cards?.yellow          ?? 0) > 0
+          const pensSaved    = st.penalty?.saved          ?? 0
+          const pensMissed   = st.penalty?.missed         ?? 0
+          const tackles      = st.tackles?.total          ?? 0
+          const interceptions = st.tackles?.interceptions ?? 0
           if (red) hadRed = true
           const cleanSheet = conceded === 0
           const stat = {
             minutes,
             goals,
-            own_goals: 0,
+            assists,
+            own_goals,
             red_card: red,
+            yellow_card,
             pens_saved: pensSaved,
             pens_missed: pensMissed,
             clean_sheet: cleanSheet,
+            saves,
+            tackles,
+            interceptions,
           }
           statRows.push({
             fixture_id: ourFixtureId,

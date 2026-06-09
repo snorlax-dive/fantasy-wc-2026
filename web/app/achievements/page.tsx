@@ -13,13 +13,11 @@ export default async function AchievementsPage() {
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const admin = createAdminClient()
-
-  // My squads + players
-  const { data: mySquads } = await admin.from('squads').select('id, stage').eq('user_id', user.id)
+  // My squads + players (own-row reads, public tables — all readable without admin)
+  const { data: mySquads } = await supabase.from('squads').select('id, stage').eq('user_id', user.id)
   const squadStage = new Map<string, string>((mySquads ?? []).map((s: any) => [s.id, s.stage]))
   const squadIds = (mySquads ?? []).map((s: any) => s.id)
-  const { data: sps } = await admin
+  const { data: sps } = await supabase
     .from('squad_players')
     .select('squad_id, player_id, is_captain')
     .in('squad_id', squadIds.length ? squadIds : ['00000000-0000-0000-0000-000000000000'])
@@ -29,15 +27,15 @@ export default async function AchievementsPage() {
 
   const [{ data: players }, { data: fixtures }, { data: preds }, { data: blocks }, { data: settingsRows }, { data: lb }] =
     await Promise.all([
-      admin.from('players').select('id, position').in('id', myPlayerIds.length ? myPlayerIds : [-1]),
-      admin.from('fixtures').select('id, stage'),
-      admin.from('predictions').select('is_banker, points').eq('user_id', user.id),
-      admin.from('blocks').select('player_id, target, stage').eq('blocker', user.id).eq('revealed', true),
-      admin.from('settings').select('key, value'),
+      supabase.from('players').select('id, position').in('id', myPlayerIds.length ? myPlayerIds : [-1]),
+      supabase.from('fixtures').select('id, stage'),
+      supabase.from('predictions').select('is_banker, points').eq('user_id', user.id),
+      supabase.from('blocks').select('player_id, target, stage').eq('blocker', user.id).eq('revealed', true),
+      supabase.from('settings').select('key, value'),
       supabase.rpc('get_leaderboard'),
     ])
   const myStats = await fetchAll((from, to) =>
-    admin
+    supabase
       .from('player_match_stats')
       .select('player_id, fixture_id, goals, clean_sheet, fantasy_points, minutes')
       .in('player_id', myPlayerIds.length ? myPlayerIds : [-1])
@@ -67,6 +65,8 @@ export default async function AchievementsPage() {
   let sniper = false
   if ((blocks ?? []).length) {
     const targetIds = [...new Set((blocks ?? []).map((b: any) => b.target))]
+    // Cross-user squads and shield_uses are restricted by RLS — admin required.
+    const admin = createAdminClient()
     const [{ data: tSquads }, { data: tShields }] = await Promise.all([
       admin.from('squads').select('id, user_id, stage').in('user_id', targetIds),
       admin.from('shield_uses').select('user_id, stage').in('user_id', targetIds),
