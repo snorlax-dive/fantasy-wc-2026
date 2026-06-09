@@ -12,8 +12,8 @@ export default function RulesPage() {
       <Section title="Getting in">
         <ul className="list-disc space-y-1 pl-5">
           <li>Open the app, enter your email and the league invite code (first time only).</li>
-          <li>We email you a <b>6-digit code</b> and a link. Type the code to sign in on any device — handy if your
-            email is on your phone but you&apos;re on a computer — or just tap the link on the same device.</li>
+          <li>We email you a <b>sign-in link</b> — open it on the device you want to use. That device stays
+            logged in, so you only sign in once per device (phone and laptop can both be logged in at the same time).</li>
           <li>Set your club name, crest and colour under <b>Your club</b>.</li>
         </ul>
       </Section>
