@@ -36,19 +36,19 @@ describe('saveFixtureResult — score validation', () => {
   })
 
   it('finished=true, non-integer score → error', async () => {
-    const db = setup()
+    setup()
     const result = await saveFixtureResult({ fixtureId: 1, scoreA: 1.5, scoreB: 1, finished: true, winnerTeam: null })
     expect(result.error).toMatch(/integers/i)
   })
 
   it('finished=true, scoreA=-1 → out of range error', async () => {
-    const db = setup()
+    setup()
     const result = await saveFixtureResult({ fixtureId: 1, scoreA: -1, scoreB: 1, finished: true, winnerTeam: null })
     expect(result.error).toMatch(/range/i)
   })
 
   it('finished=true, scoreA=21 → out of range error', async () => {
-    const db = setup()
+    setup()
     const result = await saveFixtureResult({ fixtureId: 1, scoreA: 21, scoreB: 1, finished: true, winnerTeam: null })
     expect(result.error).toMatch(/range/i)
   })

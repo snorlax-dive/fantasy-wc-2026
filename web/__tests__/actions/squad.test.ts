@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { makeChain, createMockSupabase, TEST_USER } from '../helpers/mockSupabase'
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }))
