@@ -318,7 +318,10 @@ export async function GET(req: Request) {
           // startProb = fraction of possible minutes actually played, clamped to a sensible range.
           const startProb = Math.min(0.97, Math.max(0.10, totalMinutes / (totalAppearances * 90)))
           const { pos } = our
-          const midRole = pos === 'MID' ? ((apiId % 3) === 0 ? 'ATK' as const : 'DEF' as const) : undefined
+          // Use shirt number from stats (same heuristic as step=players) so role classification
+          // is consistent across steps and re-running qualifiers doesn't cause price churn.
+          const shirtNumber = (stats[0] ?? entry.statistics?.[0])?.games?.number ?? null
+          const midRole = pos === 'MID' ? inferMidRole(shirtNumber) : undefined
 
           let xPts: number
           if (groupFx.length === 3) {

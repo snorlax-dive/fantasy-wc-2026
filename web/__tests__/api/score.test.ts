@@ -26,8 +26,8 @@ function makeRequest(authHeader?: string) {
 // regardless of call order. Works for all read + no-op writes in the route.
 function setupAdminDb(tableData: Record<string, unknown> = {}) {
   const adminDb = createMockSupabase(null)
-  adminDb.from.mockImplementation((table: string) => {
-    return makeChain({ data: (tableData[table] ?? null) })
+  adminDb.from.mockImplementation((table?: string) => {
+    return makeChain({ data: table ? (tableData[table] ?? null) : null })
   })
   mockCreateAdminClient.mockReturnValue(adminDb as never)
   return adminDb

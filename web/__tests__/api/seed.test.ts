@@ -156,10 +156,11 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
     let capturedRows: Array<{ start_prob: number }> | null = null
     adminDb.from.mockImplementationOnce(() => {
       const chain = makeChain({ data: null, error: null })
-      const orig = (chain as Record<string, ReturnType<typeof vi.fn>>).upsert
-      ;(chain as Record<string, ReturnType<typeof vi.fn>>).upsert = vi.fn((...args: unknown[]) => {
+      // Intercept upsert to capture the rows. makeChain methods return self, so we do the same.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(chain as any).upsert = vi.fn((...args: unknown[]) => {
         if (Array.isArray(args[0])) capturedRows = args[0] as Array<{ start_prob: number }>
-        return orig(...args)
+        return chain
       })
       return chain
     })
@@ -174,8 +175,9 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
 
     const res = await GET(makeRequest({ step: 'qualifiers' }))
     expect(res.status).toBe(200)
-    if (capturedRows) {
-      for (const row of capturedRows) {
+    const captured = capturedRows as Array<{ start_prob: number }> | null
+    if (captured) {
+      for (const row of captured) {
         expect(row.start_prob).toBeGreaterThanOrEqual(0.10)
         expect(row.start_prob).toBeLessThanOrEqual(0.97)
       }

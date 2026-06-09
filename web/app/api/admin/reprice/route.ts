@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { fetchAll } from '@/lib/supabase/fetchAll'
 import { teamRatings } from '@/lib/teamStrength'
-import { projectedPoints, priceFromExpectedPoints, type ProjectionInput } from '@/lib/projection'
+import { projectedPoints, projectedPointsPerMatch, priceFromExpectedPoints, type ProjectionInput } from '@/lib/projection'
 import type { Pos } from '@/lib/scoring'
 
 export const runtime = 'nodejs'
@@ -86,19 +86,22 @@ export async function GET(req: Request) {
     const { data: teams } = await db.from('teams').select('id, name')
     const teamNameById = new Map<number, string>((teams ?? []).map((t: any) => [t.id, t.name]))
 
-    // Look up each team's upcoming fixture for the target stage so we can
-    // adjust clean-sheet probability by actual opponent attack rating.
+    // Look up each team's fixture(s) for the target stage to adjust clean-sheet
+    // probability by opponent attack rating. GROUP has 3 fixtures per team; KO has 1.
     const { data: stageFxRows } = await db
       .from('fixtures')
       .select('team_a, team_b')
       .eq('stage', stage)
-    const opponentAttackByTeam = new Map<number, number>()
+    // Store all opponent attacks per team — GROUP accumulates 3, KO stages have 1.
+    const opponentAttacksByTeam = new Map<number, number[]>()
     for (const fx of stageFxRows ?? []) {
       if (fx.team_a && fx.team_b) {
         const atkA = teamRatings(teamNameById.get(fx.team_a) ?? '').attack
         const atkB = teamRatings(teamNameById.get(fx.team_b) ?? '').attack
-        opponentAttackByTeam.set(fx.team_a, atkB)
-        opponentAttackByTeam.set(fx.team_b, atkA)
+        if (!opponentAttacksByTeam.has(fx.team_a)) opponentAttacksByTeam.set(fx.team_a, [])
+        if (!opponentAttacksByTeam.has(fx.team_b)) opponentAttacksByTeam.set(fx.team_b, [])
+        opponentAttacksByTeam.get(fx.team_a)!.push(atkB)
+        opponentAttacksByTeam.get(fx.team_b)!.push(atkA)
       }
     }
 
@@ -131,24 +134,31 @@ export async function GET(req: Request) {
       // No shirt number stored on players table — use a deterministic hash split:
       // roughly 1/3 of mids are treated as ATK type (≈ real squad composition).
       const midRole = pos === 'MID' ? (((p.api_player_id ?? 0) % 3) === 0 ? 'ATK' as const : 'DEF' as const) : undefined
-      const opponentAttack = opponentAttackByTeam.get(p.team_id)
+      const opponentAttacks = opponentAttacksByTeam.get(p.team_id) ?? []
 
-      const input: ProjectionInput = {
+      const baseInput: Omit<ProjectionInput, 'matchesExpected' | 'opponentAttack'> = {
         pos,
         attack,
         defense,
         startProb,
         midRole,
-        matchesExpected,
-        opponentAttack,
         realized: form ? { matches: form.matches, pointsPerMatch: form.pointsPerMatch } : undefined,
         priorWeight: 3,
       }
-      const xPts = projectedPoints(input)
+
+      // For GROUP (3 opponents), sum per-fixture projections so each opponent's attack
+      // rating is used accurately. For KO stages there is exactly one opponent.
+      let xPts: number
+      if (opponentAttacks.length > 1) {
+        xPts = opponentAttacks.reduce((sum, opponentAttack) =>
+          sum + projectedPointsPerMatch({ ...baseInput, matchesExpected: 1, opponentAttack }), 0)
+      } else {
+        xPts = projectedPoints({ ...baseInput, matchesExpected, opponentAttack: opponentAttacks[0] })
+      }
       const price = priceFromExpectedPoints(pos, xPts / matchesExpected)
       const expected_points = Math.round(xPts * 100) / 100
       updates.push({ id: p.id, price, expected_points })
-      if (preview.length < 25) preview.push({ id: p.id, pos, price, expected_points, formMatches: form?.matches ?? 0, opponentAttack: opponentAttack ?? null })
+      if (preview.length < 25) preview.push({ id: p.id, pos, price, expected_points, formMatches: form?.matches ?? 0, opponentAttacks })
     }
 
     if (!dry && updates.length) await chunkedUpsert(db, 'players', updates, 'id')
