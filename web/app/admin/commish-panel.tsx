@@ -95,6 +95,38 @@ export function CommishPanel({
     })
   }
 
+  // Seed steps (players / qualifiers) are rate-limited by API-Football, so they
+  // page through all 48 teams 8 at a time. This walks the batches automatically,
+  // following the route's nextOffset/done, with a breather between calls.
+  function runBatched(label: string, step: string) {
+    start(async () => {
+      let offset = 0
+      for (let i = 0; i < 12; i++) {
+        note(`⏳ ${label} @${offset}…`)
+        try {
+          const res = await fetch(`/api/admin/seed?step=${step}&offset=${offset}&limit=8`, { method: 'GET' })
+          const json = await res.json()
+          if (!res.ok) {
+            note(`❌ ${label} @${offset}: ${JSON.stringify(json)}`)
+            return
+          }
+          const wrote = json.inserted ?? json.updated ?? 0
+          note(`✅ ${label} @${offset}: +${wrote} (${json.processedTeams ?? 0} teams)`)
+          if (json.done) {
+            note(`🏁 ${label} complete`)
+            return
+          }
+          offset = json.nextOffset ?? offset + 8
+          await new Promise((r) => setTimeout(r, 2500)) // rate-limit breather
+        } catch (e) {
+          note(`❌ ${label} @${offset}: ${String(e)}`)
+          return
+        }
+      }
+      note(`⚠️ ${label}: stopped after 12 batches (safety cap)`)
+    })
+  }
+
   const blockers = readiness.filter((c) => !c.ok && !c.warn).length
 
   return (
@@ -242,9 +274,15 @@ export function CommishPanel({
       {/* Data ops */}
       <section className="mt-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
         <h2 className="text-sm font-bold text-cro-navy">Data &amp; scoring</h2>
+        <p className="mt-1 text-xs text-slate-500">
+          Seed in order: <b>1</b> teams &amp; fixtures → <b>2</b> squads → <b>3</b> (optional) qualifier prices. Steps 2 &amp; 3
+          run all 48 teams automatically in rate-limited batches — keep this page open until you see
+          &ldquo;complete&rdquo; in the log below.
+        </p>
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <Op label="Re-seed teams & fixtures" onClick={() => runOp('seed base', '/api/admin/seed?step=base&season=2026')} pending={pending} />
-          <Op label="Re-seed squads (players)" onClick={() => runOp('seed players', '/api/admin/seed?step=players&season=2026')} pending={pending} />
+          <Op label="1 · Seed teams & fixtures" onClick={() => runOp('seed base', '/api/admin/seed?step=base&season=2026')} pending={pending} />
+          <Op label="2 · Seed all squads (auto)" onClick={() => runBatched('seed players', 'players')} pending={pending} />
+          <Op label="3 · Refine prices · qualifiers (auto)" onClick={() => runBatched('qualifiers', 'qualifiers')} pending={pending} />
           <Op label="Poll results now" onClick={() => runOp('poll', '/api/admin/poll?limit=24')} pending={pending} />
           <Op label="Recompute scores now" onClick={() => runOp('score', '/api/admin/score')} pending={pending} />
         </div>
