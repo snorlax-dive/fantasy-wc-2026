@@ -238,7 +238,7 @@ describe('derivePersonalAttack', () => {
     expect(result).toBe(0.97)
   })
 
-  it('zero scorer: personal_attack below team attack (shrunk toward 0 via prior)', () => {
+  it('zero scorer: personal_attack below team attack (zero observed goals pull the shrunk estimate below team rating)', () => {
     const result = derivePersonalAttack('FWD', 0.8, {
       totalGoals: 0, totalAssists: 0, totalMinutes: 900, totalAppearances: 10,
     })
