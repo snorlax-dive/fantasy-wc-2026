@@ -30,7 +30,7 @@ export type MockSupabase = ReturnType<typeof createMockSupabase>
 // By default every call returns `{ data: null, error: null }`.
 export function createMockSupabase(user: { id: string; email?: string } | null = null) {
   // Accept an optional table-name arg so callers can use mockImplementation with a table param.
-  const mockFrom = vi.fn((_table?: string) => makeChain())
+  const mockFrom = vi.fn((_?: string) => makeChain())
 
   return {
     auth: {

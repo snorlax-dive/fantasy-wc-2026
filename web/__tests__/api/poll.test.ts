@@ -115,7 +115,7 @@ describe('GET /api/admin/poll — stage mapping', () => {
     ['final', 'FINAL'],
   ]
 
-  it.each(stageMap)('API round "%s" → stage "%s"', async (apiRound, _expected) => {
+  it.each(stageMap)('API round "%s" → stage "%s"', async (apiRound) => {
     setupAuth()
     const fixture = {
       fixture: { id: 1, status: { short: 'FT' }, date: '2026-06-15T14:00:00Z' },
