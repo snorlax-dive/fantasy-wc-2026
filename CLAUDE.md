@@ -22,7 +22,22 @@ All from `web/`:
 - `npm run build` — production build
 - `npm run lint` — ESLint (flat config, `eslint-config-next` core-web-vitals + typescript)
 
-There is no test suite/runner configured in this repo.
+**Testing (Vitest + Playwright):**
+- `npm run test` — run all Vitest unit/integration tests (in `web/__tests__/`)
+- `npm run test:watch` — watch mode
+- `npm run test:coverage` — coverage report
+- `npm run test:e2e` — Playwright E2E tests (requires dev server)
+- Run a single test file: `npx vitest run __tests__/lib/scoring.test.ts`
+
+**Testing requirements:** When implementing any new feature or fixing any bug, write corresponding tests in `web/__tests__/` before reporting the task complete. Follow the existing patterns:
+- Pure library functions (`lib/`) → unit tests in `__tests__/lib/`, no mocks needed
+- Server actions (`app/*/actions.ts`) → integration tests in `__tests__/actions/` mocking Supabase clients
+- API route handlers (`app/api/`) → integration tests in `__tests__/api/` mocking Supabase + external APIs
+- Mock helper: `__tests__/helpers/mockSupabase.ts` — use `makeChain()` and `createMockSupabase()`
+- `apiFootball` mocks must include the constants: `{ WORLD_CUP_LEAGUE: 1, SEASON: 2026, apiFootball: vi.fn() }`
+- Use table-name router pattern (`adminDb.from.mockImplementation(table => makeChain({ data: tableData[table] }))`) for complex API routes with conditional DB call ordering
+
+TypeScript path alias `@/` maps to `web/` (set in `tsconfig.json`). Use it for all internal imports.
 
 ## Important: this is Next.js 16, not the Next.js you may know
 
@@ -32,6 +47,17 @@ training data). Notably:
 - `cookies()` from `next/headers` is **async** and must be awaited (see `lib/supabase/server.ts`).
 - Before writing Next.js code, check `node_modules/next/dist/docs/` for the current API rather than
   assuming prior-version behavior.
+
+## Styling
+
+Tailwind CSS v4 (PostCSS). There is **no `tailwind.config.js`** — all theme customisation lives in
+`app/globals.css` inside `@theme {}` blocks. Custom design tokens:
+- `cro-red` / `cro-red-dark` / `cro-navy` / `cro-blue` — Croatia palette (primary brand colours)
+- `pitch` / `pitch-dark` — green pitch background
+- `.checker` / `.checker-sm` — red-white Croatian checkerboard CSS utility classes
+
+React 19 is in use alongside Next.js 16; `use client` / `use server` directives behave as documented in
+the Next.js 16 docs.
 
 ## Architecture
 
@@ -90,9 +116,24 @@ deltas). They're run manually in the Supabase SQL editor — there's no migratio
 repo. When changing schema, add a new numbered migration file rather than editing old ones.
 
 Core tables: `profiles`, `teams`, `players`, `fixtures`, `player_match_stats`, `predictions`, `squads`/
-`squad_players`, `bracket_picks`, `blocks`/`shield_uses`, `settings`. Stage progression is modeled via
-the `stage_bucket` enum (`GROUP, R32, R16, QF, SF, FINAL`) used across squads, blocks, and bracket picks
-to drive the "re-draft every knockout round" mechanic.
+`squad_players`, `bracket_picks`, `blocks`/`shield_uses`, `chip_uses`, `settings`. Stage progression is
+modeled via the `stage_bucket` enum (`GROUP, R32, R16, QF, SF, FINAL`) used across squads, blocks, and
+bracket picks to drive the "re-draft every knockout round" mechanic.
+
+`chip_uses` tracks one-time chips per user per stage: currently only `TRIPLE_CAPTAIN` (captain scores ×3
+instead of ×2 for one stage; once used it cannot move to another stage).
+
+`settings` is a key/value store (key `text`, value `jsonb`) that drives runtime tournament state. Key
+entries:
+- `current_stage` — active `stage_bucket` value; governs squad lock checks and blocks/shields context
+- `tournament_locked` — `true` freezes all user mutations globally
+- `signups_open` — `true` allows new magic-link registrations
+- `budget_cap` — squad budget ceiling in millions (default 100)
+- `shields_per_user` — how many shield uses each player gets for the whole tournament (default 2)
+- `block_per_target_cap` — max blocks that land on one target per stage (default 2; extras bounce)
+- `last_scored_at` — ISO timestamp written by `/api/admin/score` on success (health check)
+- `standings_baseline` / `standings_baseline_stage` — leaderboard rank snapshot taken at each stage
+  transition to power ▲▼ movement display
 
 `players` has `price`, `expected_points` (per-stage projected total from `lib/projection.ts`), and
 `start_prob` (from qualifier minutes; `NULL` = falls back to shirt-number heuristic).
@@ -132,6 +173,25 @@ Standard Next.js App Router: each top-level feature is a route segment under `ap
 `actions.ts` (server actions, mutate via the server/admin Supabase client, enforce lock-time and
 ownership) + an interactive client component (e.g. `squad-builder.tsx`, `predictions-board.tsx`,
 `blocks-board.tsx`, `bracket-board.tsx`).
+
+`components/` holds shared UI:
+- `app-chrome.tsx` — the top header + mobile bottom-nav shell that wraps every authenticated page.
+  Skips itself on `/login` and `/auth` routes.
+- `toast.tsx` / `top-progress.tsx` / `countdown.tsx` — utility UI primitives used across features.
+
+`app/admin/results/` — commissioner-only manual result entry: set match scores, mark finished, and
+save per-player stats directly (fallback when API-Football polling is wrong or missing). After saving
+results here, run `/api/admin/score` to recompute points.
+
+`app/recap/card/route.tsx` — dynamic OG image route (ImageResponse) for the shareable recap card;
+does not render HTML.
+
+`lib/notifyToken.ts` — HMAC-based token helpers for email unsubscribe links (`/api/unsubscribe`).
+
+### Squad formation rules
+Squad validation (enforced in `app/squad/actions.ts` and mirrored in the builder UI): exactly 11
+players, 1 GK, 3–5 DEF, 2–5 MID, 1–3 FWD. Total price must not exceed `settings.budget_cap`.
+Lock check: squads freeze once the first fixture of `current_stage` has kicked off.
 
 ### Environment variables
 `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`,
