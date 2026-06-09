@@ -374,13 +374,10 @@ export async function GET(req: Request) {
         }
 
         if (playerUpdates.length) {
-          const results = await Promise.all(
-            playerUpdates.map(({ id, ...fields }: any) =>
-              db.from('players').update(fields).eq('id', id)
-            )
-          )
-          const firstErr = (results as any[]).find((r: any) => r.error)?.error
-          if (firstErr) throw firstErr
+          const { error: upErr } = await db
+            .from('players')
+            .upsert(playerUpdates, { onConflict: 'id' })
+          if (upErr) throw upErr
           updated += playerUpdates.length
         }
       }

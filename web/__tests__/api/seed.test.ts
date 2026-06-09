@@ -159,8 +159,9 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
     adminDb.from.mockImplementationOnce(() => {
       const chain = makeChain({ data: null, error: null })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(chain as any).update = vi.fn((fields: unknown) => {
-        capturedFields = fields as { start_prob: number }
+      ;(chain as any).upsert = vi.fn((rows: unknown) => {
+        const arr = rows as Array<{ start_prob: number }>
+        if (arr?.length) capturedFields = arr[0]
         return chain
       })
       return chain
@@ -195,8 +196,9 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
     adminDb.from.mockImplementationOnce(() => {
       const chain = makeChain({ data: null, error: null })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(chain as any).update = vi.fn((fields: unknown) => {
-        capturedFields = fields as { personal_attack: number | null }
+      ;(chain as any).upsert = vi.fn((rows: unknown) => {
+        const arr = rows as Array<{ personal_attack: number | null }>
+        if (arr?.length) capturedFields = arr[0]
         return chain
       })
       return chain
@@ -220,7 +222,7 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
     expect(pa!).toBeLessThanOrEqual(0.97)
   })
 
-  it('GK gets null personal_attack in update', async () => {
+  it('GK gets null personal_attack in upsert', async () => {
     const adminDb = setupAdminDb()
     adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 1, name: 'Norway', api_team_id: 10 }] }))
     adminDb.from.mockReturnValueOnce(makeChain({ data: [] })) // allGroupFx
@@ -230,8 +232,9 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
     adminDb.from.mockImplementationOnce(() => {
       const chain = makeChain({ data: null, error: null })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(chain as any).update = vi.fn((fields: unknown) => {
-        capturedFields = fields as { personal_attack: number | null }
+      ;(chain as any).upsert = vi.fn((rows: unknown) => {
+        const arr = rows as Array<{ personal_attack: number | null }>
+        if (arr?.length) capturedFields = arr[0]
         return chain
       })
       return chain
@@ -262,8 +265,9 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
     adminDb.from.mockImplementationOnce(() => {
       const chain = makeChain({ data: null, error: null })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(chain as any).update = vi.fn((fields: unknown) => {
-        capturedFields = fields as { start_prob: number }
+      ;(chain as any).upsert = vi.fn((rows: unknown) => {
+        const arr = rows as Array<{ start_prob: number }>
+        if (arr?.length) capturedFields = arr[0]
         return chain
       })
       return chain
