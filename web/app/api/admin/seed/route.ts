@@ -356,7 +356,9 @@ export async function GET(req: Request) {
 
           const price = priceFromExpectedPoints(pos, xPts / 3)
           const expected_points = Math.round(xPts * 100) / 100
-          playerUpdates.push({ id: our.id, start_prob: startProb, price, expected_points, personal_attack: personalAttack })
+          // Include team_id and position so the upsert is safe even if the row is
+          // absent (re-seed race): without them an accidental INSERT would violate NOT NULL.
+          playerUpdates.push({ id: our.id, team_id: t.id, position: our.pos, start_prob: startProb, price, expected_points, personal_attack: personalAttack })
 
           if (preview.length < 20) {
             preview.push({
