@@ -334,7 +334,7 @@ export async function GET(req: Request) {
             (w_sp * shirtBasedProb + totalAppearances * rawProb) / (w_sp + totalAppearances)
           ))
 
-          const personalAttack = derivePersonalAttack(pos, midRole, attack, {
+          const personalAttack = derivePersonalAttack(pos, attack, {
             totalGoals, totalAssists, totalMinutes, totalAppearances,
           })
 
@@ -368,6 +368,7 @@ export async function GET(req: Request) {
               totalAppearances,
               price,
               expected_points,
+              personal_attack: personalAttack,
             })
           }
         }

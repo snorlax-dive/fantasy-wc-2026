@@ -213,33 +213,33 @@ describe('projectedPointsPerMatch — FWD > DEF calibration', () => {
 // ---------------------------------------------------------------------------
 describe('derivePersonalAttack', () => {
   it('returns null for GK', () => {
-    expect(derivePersonalAttack('GK', undefined, 0.8, {
+    expect(derivePersonalAttack('GK', 0.8, {
       totalGoals: 2, totalAssists: 1, totalMinutes: 900, totalAppearances: 10,
     })).toBeNull()
   })
 
   it('returns null for DEF', () => {
-    expect(derivePersonalAttack('DEF', undefined, 0.8, {
+    expect(derivePersonalAttack('DEF', 0.8, {
       totalGoals: 1, totalAssists: 2, totalMinutes: 900, totalAppearances: 10,
     })).toBeNull()
   })
 
   it('returns null when totalMinutes is 0', () => {
-    expect(derivePersonalAttack('FWD', undefined, 0.8, {
+    expect(derivePersonalAttack('FWD', 0.8, {
       totalGoals: 0, totalAssists: 0, totalMinutes: 0, totalAppearances: 0,
     })).toBeNull()
   })
 
   it('elite scorer: result clamped to 0.97', () => {
     // 10 goals in 900 min = 1.0 g/90, far above model rate → implied >> 1.0 → clamps
-    const result = derivePersonalAttack('FWD', undefined, 0.55, {
+    const result = derivePersonalAttack('FWD', 0.55, {
       totalGoals: 10, totalAssists: 0, totalMinutes: 900, totalAppearances: 10,
     })
     expect(result).toBe(0.97)
   })
 
   it('zero scorer: personal_attack below team attack (implied=0 shrinks result below team rating)', () => {
-    const result = derivePersonalAttack('FWD', undefined, 0.8, {
+    const result = derivePersonalAttack('FWD', 0.8, {
       totalGoals: 0, totalAssists: 0, totalMinutes: 900, totalAppearances: 10,
     })
     expect(result).not.toBeNull()
@@ -254,7 +254,7 @@ describe('derivePersonalAttack', () => {
       [20, 10, 900, 10],
     ]
     for (const [g, a, min, apps] of cases) {
-      const r = derivePersonalAttack('FWD', undefined, 0.7, {
+      const r = derivePersonalAttack('FWD', 0.7, {
         totalGoals: g, totalAssists: a, totalMinutes: min, totalAppearances: apps,
       })
       if (r !== null) {
