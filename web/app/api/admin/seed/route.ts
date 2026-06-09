@@ -270,6 +270,15 @@ export async function GET(req: Request) {
         }
       }
 
+      // Does the players table have the personal_attack column yet (migration 0010)?
+      // If not, omit it from updates so the step still works (start_prob/price/xpts)
+      // rather than crashing on an unknown column.
+      let hasPersonalAttack = true
+      {
+        const probe = await db.from('players').select('personal_attack').limit(1)
+        if (probe.error) hasPersonalAttack = false
+      }
+
       let updated = 0
       const preview: any[] = []
 
@@ -381,7 +390,12 @@ export async function GET(req: Request) {
             playerUpdates.map((u) =>
               db
                 .from('players')
-                .update({ start_prob: u.start_prob, price: u.price, expected_points: u.expected_points })
+                .update({
+                  start_prob: u.start_prob,
+                  price: u.price,
+                  expected_points: u.expected_points,
+                  ...(hasPersonalAttack ? { personal_attack: u.personal_attack } : {}),
+                })
                 .eq('id', u.id)
             )
           )
