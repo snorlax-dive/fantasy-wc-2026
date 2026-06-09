@@ -157,11 +157,17 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
     adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 50, api_player_id: 999, position: 'FWD' }] }))
 
     let capturedRow: Record<string, unknown> | null = null
+    let capturedEqId: unknown = null
     adminDb.from.mockImplementationOnce(() => {
       const chain = makeChain({ data: null, error: null })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ;(chain as any).update = vi.fn((...args: unknown[]) => {
         capturedRow = args[0] as Record<string, unknown>
+        return chain
+      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(chain as any).eq = vi.fn((...args: unknown[]) => {
+        if (args[0] === 'id') capturedEqId = args[1]
         return chain
       })
       return chain
@@ -179,6 +185,7 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
     const res = await GET(makeRequest({ step: 'qualifiers' }))
     expect(res.status).toBe(200)
     expect(capturedRow).not.toBeNull()
+    expect(capturedEqId).toBe(50)
     // Shrinkage pulls the result below 0.97 (formula: (4*shirtPrior + 2*1.0) / 6)
     expect(capturedRow!.start_prob as number).toBeLessThan(0.97)
     expect(capturedRow!.start_prob as number).toBeGreaterThan(0.10)
@@ -194,11 +201,17 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
     adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 50, api_player_id: 999, position: 'FWD' }] }))
 
     let capturedRow: Record<string, unknown> | null = null
+    let capturedEqId: unknown = null
     adminDb.from.mockImplementationOnce(() => {
       const chain = makeChain({ data: null, error: null })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ;(chain as any).update = vi.fn((...args: unknown[]) => {
         capturedRow = args[0] as Record<string, unknown>
+        return chain
+      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(chain as any).eq = vi.fn((...args: unknown[]) => {
+        if (args[0] === 'id') capturedEqId = args[1]
         return chain
       })
       return chain
@@ -216,6 +229,7 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
     const res = await GET(makeRequest({ step: 'qualifiers' }))
     expect(res.status).toBe(200)
     expect(capturedRow).not.toBeNull()
+    expect(capturedEqId).toBe(50)
     const pa = capturedRow!.personal_attack as number | null
     expect(pa).not.toBeNull()
     expect(pa!).toBeGreaterThan(0.80) // Norway team attack
@@ -230,11 +244,17 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
     adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 51, api_player_id: 888, position: 'GK' }] }))
 
     let capturedRow: Record<string, unknown> | null = null
+    let capturedEqId: unknown = null
     adminDb.from.mockImplementationOnce(() => {
       const chain = makeChain({ data: null, error: null })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ;(chain as any).update = vi.fn((...args: unknown[]) => {
         capturedRow = args[0] as Record<string, unknown>
+        return chain
+      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(chain as any).eq = vi.fn((...args: unknown[]) => {
+        if (args[0] === 'id') capturedEqId = args[1]
         return chain
       })
       return chain
@@ -252,6 +272,7 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
     const res = await GET(makeRequest({ step: 'qualifiers' }))
     expect(res.status).toBe(200)
     expect(capturedRow).not.toBeNull()
+    expect(capturedEqId).toBe(51)
     expect(capturedRow!.personal_attack).toBeNull()
   })
 
@@ -263,11 +284,17 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
     adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 50, api_player_id: 100, position: 'FWD' }] }))
 
     let capturedRow: Record<string, unknown> | null = null
+    let capturedEqId: unknown = null
     adminDb.from.mockImplementationOnce(() => {
       const chain = makeChain({ data: null, error: null })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ;(chain as any).update = vi.fn((...args: unknown[]) => {
         capturedRow = args[0] as Record<string, unknown>
+        return chain
+      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(chain as any).eq = vi.fn((...args: unknown[]) => {
+        if (args[0] === 'id') capturedEqId = args[1]
         return chain
       })
       return chain
@@ -284,6 +311,7 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
     const res = await GET(makeRequest({ step: 'qualifiers' }))
     expect(res.status).toBe(200)
     expect(capturedRow).not.toBeNull()
+    expect(capturedEqId).toBe(50)
     expect(capturedRow!.start_prob as number).toBeGreaterThanOrEqual(0.10)
     expect(capturedRow!.start_prob as number).toBeLessThanOrEqual(0.97)
   })

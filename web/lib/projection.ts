@@ -130,7 +130,7 @@ export function priceFromExpectedPoints(pos: Pos, perMatchPts: number): number {
 // and when there is no playing time.
 export function derivePersonalAttack(
   pos: Pos,
-  midRole: 'ATK' | 'DEF' | undefined,
+  midRole: 'ATK' | 'DEF' | undefined = undefined,
   teamAttack: number,
   observed: { totalGoals: number; totalAssists: number; totalMinutes: number; totalAppearances: number },
 ): number | null {

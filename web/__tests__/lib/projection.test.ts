@@ -259,6 +259,17 @@ describe('derivePersonalAttack', () => {
     expect(result!).toBeGreaterThan(0.10)
   })
 
+  it('DEF MID gets higher personal_attack than ATK MID for identical stats (lower baseline expectation)', () => {
+    // DEF mid model rate is lower → same observed goals/assists look "more impressive"
+    // relative to expectation → higher implied multiplier → higher shrunk value.
+    const obs = { totalGoals: 3, totalAssists: 2, totalMinutes: 900, totalAppearances: 10 }
+    const atk = derivePersonalAttack('MID', 'ATK', 0.6, obs)
+    const def = derivePersonalAttack('MID', 'DEF', 0.6, obs)
+    expect(atk).not.toBeNull()
+    expect(def).not.toBeNull()
+    expect(def!).toBeGreaterThan(atk!)
+  })
+
   it('result is always in [0.10, 0.97]', () => {
     const cases: Array<[number, number, number, number]> = [
       [0, 0, 90, 1],

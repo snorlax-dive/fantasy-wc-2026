@@ -338,9 +338,9 @@ export async function GET(req: Request) {
           // against elite players with sparse qualifier participation (injury, rotation).
           const shirtBasedProb = startProbFor(apiId, shirtNumber)
           const rawProb = totalMinutes / (totalAppearances * 90)
-          const w_sp = 4
+          const wSp = 4
           const startProb = Math.min(0.97, Math.max(0.10,
-            (w_sp * shirtBasedProb + totalAppearances * rawProb) / (w_sp + totalAppearances)
+            (wSp * shirtBasedProb + totalAppearances * rawProb) / (wSp + totalAppearances)
           ))
 
           const personalAttack = derivePersonalAttack(pos, midRole, attack, {
