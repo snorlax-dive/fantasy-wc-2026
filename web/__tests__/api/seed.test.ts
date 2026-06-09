@@ -279,9 +279,8 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
 
     const res = await GET(makeRequest({ step: 'qualifiers' }))
     expect(res.status).toBe(200)
-    if (capturedFields) {
-      expect(capturedFields.start_prob).toBeGreaterThanOrEqual(0.10)
-      expect(capturedFields.start_prob).toBeLessThanOrEqual(0.97)
-    }
+    expect(capturedFields).not.toBeNull()
+    expect(capturedFields!.start_prob).toBeGreaterThanOrEqual(0.10)
+    expect(capturedFields!.start_prob).toBeLessThanOrEqual(0.97)
   })
 })
