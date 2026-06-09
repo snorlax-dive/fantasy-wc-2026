@@ -137,8 +137,9 @@ export function derivePersonalAttack(
   if (pos === 'GK' || pos === 'DEF') return null
   if (observed.totalMinutes <= 0 || observed.totalAppearances <= 0) return null
 
-  const goalRate   = pos === 'MID' ? (midRole === 'ATK' ? 0.20 : 0.07) : BASE_GOAL_RATE[pos]
-  const assistRate = pos === 'MID' ? (midRole === 'ATK' ? 0.24 : 0.10) : BASE_ASSIST_RATE[pos]
+  const effectiveMidRole = midRole ?? 'DEF'
+  const goalRate   = pos === 'MID' ? (effectiveMidRole === 'ATK' ? 0.20 : 0.07) : BASE_GOAL_RATE[pos]
+  const assistRate = pos === 'MID' ? (effectiveMidRole === 'ATK' ? 0.24 : 0.10) : BASE_ASSIST_RATE[pos]
   const modelRate  = goalRate * GOAL_PTS[pos] + assistRate * 3
   if (modelRate <= 0) return null
 
