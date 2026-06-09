@@ -30,7 +30,9 @@ jobs:
           cache-dependency-path: web/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        # npm install (not ci) to handle cross-platform optional deps
+        # (lock file generated on macOS lacks Linux-specific @emnapi binaries)
+        run: npm install
 
       - name: Lint
         run: npm run lint
