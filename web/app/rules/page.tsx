@@ -11,7 +11,9 @@ export default function RulesPage() {
 
       <Section title="Getting in">
         <ul className="list-disc space-y-1 pl-5">
-          <li>Open the app, enter your email and the league invite code, then click the magic link.</li>
+          <li>Open the app, enter your email and the league invite code (first time only).</li>
+          <li>We email you a <b>6-digit code</b> and a link. Type the code to sign in on any device — handy if your
+            email is on your phone but you&apos;re on a computer — or just tap the link on the same device.</li>
           <li>Set your club name, crest and colour under <b>Your club</b>.</li>
         </ul>
       </Section>
@@ -49,14 +51,20 @@ export default function RulesPage() {
               <Tr e="Played 60+ min" v={['+2', '+2', '+2', '+2']} />
               <Tr e="Played 1–59 min" v={['+1', '+1', '+1', '+1']} />
               <Tr e="Goal" v={['+6', '+6', '+5', '+4']} />
+              <Tr e="Assist" v={['+3', '+3', '+3', '+3']} />
               <Tr e="Clean sheet (60+ min)" v={['+4', '+4', '+1', '0']} />
               <Tr e="Penalty save" v={['+5', '—', '—', '—']} />
               <Tr e="Penalty miss" v={['−2', '−2', '−2', '−2']} />
+              <Tr e="Yellow card" v={['−1', '−1', '−1', '−1']} />
               <Tr e="Red card" v={['−3', '−3', '−3', '−3']} />
               <Tr e="Own goal" v={['−2', '−2', '−2', '−2']} />
             </tbody>
           </table>
         </div>
+        <p className="mt-2 text-xs text-slate-500">
+          Plus, from match stats: <b>+1 for every 3 goalkeeper saves</b>, and <b>+1 for every 4 tackles + interceptions
+          combined</b> (max +2 per match).
+        </p>
         <ul className="mt-3 list-disc space-y-1 pl-5">
           <li><b>Captain</b> — double points (×2).</li>
           <li><b>Triple Captain</b> — once per tournament, your captain scores ×3.</li>
