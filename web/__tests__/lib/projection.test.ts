@@ -165,6 +165,33 @@ describe('priceFromExpectedPoints — range recalibration', () => {
   })
 })
 
+describe('priceFromExpectedPoints — team-relative ceiling', () => {
+  it('Qatar-level team (attack=0.52) caps FWD price at £9.5 regardless of xPts', () => {
+    // Without cap: xPts=3.4 → ~£13; Qatar's ceiling = 4.5+9*(0.52/0.97)=9.32 → £9.5
+    const uncapped = priceFromExpectedPoints('FWD', 3.4)
+    const capped   = priceFromExpectedPoints('FWD', 3.4, 0.52)
+    expect(uncapped).toBeGreaterThan(9.5)
+    expect(capped).toBe(9.5)
+  })
+
+  it('Brazil-level team (attack=0.95) is unaffected — ceiling rounds to £13.5', () => {
+    // 4.5+9*(0.95/0.97)=13.31 → £13.5 → no cap for any realistic price
+    const uncapped = priceFromExpectedPoints('FWD', 3.4)
+    const capped   = priceFromExpectedPoints('FWD', 3.4, 0.95)
+    expect(capped).toBe(uncapped)
+  })
+
+  it('Norway FWD (attack=0.80): ceiling £12.0 — high xPts capped, low xPts passes through', () => {
+    // 4.5+9*(0.80/0.97)=11.92 → £12.0 ceiling
+    expect(priceFromExpectedPoints('FWD', 3.4, 0.80)).toBe(12.0)   // uncapped ~£13, capped £12
+    expect(priceFromExpectedPoints('FWD', 2.8, 0.80)).toBeLessThanOrEqual(12.0) // already below ceiling
+  })
+
+  it('omitting teamAttack is backward compatible with no cap', () => {
+    expect(priceFromExpectedPoints('FWD', 3.4)).toBe(priceFromExpectedPoints('FWD', 3.4, undefined))
+  })
+})
+
 describe('priceFromExpectedPoints — monotonicity', () => {
   it('higher xPts → same or higher price (same position)', () => {
     for (const pos of ['GK', 'DEF', 'MID', 'FWD'] as const) {
