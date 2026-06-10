@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { projectedPointsPerMatch, projectedPoints, priceFromExpectedPoints, derivePersonalAttack, inferMidRole } from '@/lib/projection'
+import { projectedPointsPerMatch, projectedPoints, priceFromExpectedPoints, derivePersonalAttack, inferMidRole, mapPosition } from '@/lib/projection'
 import type { ProjectionInput } from '@/lib/projection'
 
 const base = (): ProjectionInput => ({
@@ -333,4 +333,29 @@ describe('inferMidRole — qualifier stats upgrade to ATK', () => {
     expect(inferMidRole(22, undefined)).toBe('DEF')
     expect(inferMidRole(10, undefined)).toBe('ATK')
   })
+})
+
+// ---------------------------------------------------------------------------
+// mapPosition — API-Football position string → internal Pos
+// ---------------------------------------------------------------------------
+describe('mapPosition — standard API-Football strings', () => {
+  it('Goalkeeper → GK', () => expect(mapPosition('Goalkeeper')).toBe('GK'))
+  it('Defender → DEF', () => expect(mapPosition('Defender')).toBe('DEF'))
+  it('Midfielder → MID', () => expect(mapPosition('Midfielder')).toBe('MID'))
+  it('Attacker → FWD', () => expect(mapPosition('Attacker')).toBe('FWD'))
+  it('Forward → FWD', () => expect(mapPosition('Forward')).toBe('FWD'))
+  it('Striker → FWD', () => expect(mapPosition('Striker')).toBe('FWD'))
+})
+
+describe('mapPosition — sub-position strings (regression: previously misclassified)', () => {
+  it('Defensive Midfielder → MID (was DEF before fix)', () => expect(mapPosition('Defensive Midfielder')).toBe('MID'))
+  it('Attacking Midfielder → MID (was FWD before fix)', () => expect(mapPosition('Attacking Midfielder')).toBe('MID'))
+})
+
+describe('mapPosition — edge cases', () => {
+  it('null → FWD (catch-all)', () => expect(mapPosition(null)).toBe('FWD'))
+  it('undefined → FWD (catch-all)', () => expect(mapPosition(undefined)).toBe('FWD'))
+  it('empty string → FWD (catch-all)', () => expect(mapPosition('')).toBe('FWD'))
+  it('case-insensitive: "midfielder" → MID', () => expect(mapPosition('midfielder')).toBe('MID'))
+  it('case-insensitive: "GOALKEEPER" → GK', () => expect(mapPosition('GOALKEEPER')).toBe('GK'))
 })

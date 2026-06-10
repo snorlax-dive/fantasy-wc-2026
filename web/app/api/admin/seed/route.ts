@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { apiFootball, WORLD_CUP_LEAGUE, SEASON } from '@/lib/apiFootball'
 import { teamRatings } from '@/lib/teamStrength'
-import { projectedPointsPerMatch, projectedPoints, priceFromExpectedPoints, derivePersonalAttack, inferMidRole } from '@/lib/projection'
+import { projectedPointsPerMatch, projectedPoints, priceFromExpectedPoints, derivePersonalAttack, inferMidRole, mapPosition } from '@/lib/projection'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -29,14 +29,6 @@ async function authorized(req: Request): Promise<boolean> {
 
 type Pos = 'GK' | 'DEF' | 'MID' | 'FWD'
 
-function mapPosition(p: string | null | undefined): Pos {
-  const s = (p ?? '').toLowerCase()
-  if (s.startsWith('goal') || s === 'g') return 'GK'
-  // "Defensive Midfielder" starts with "def" but is still a MID — check for "mid" first
-  if (s.includes('mid') || s.includes('midfielder')) return 'MID'
-  if (s.startsWith('def') || s === 'd') return 'DEF'
-  return 'FWD'
-}
 
 function mapStage(round: string): 'GROUP' | 'R32' | 'R16' | 'QF' | 'SF' | 'FINAL' {
   const s = round.toLowerCase()

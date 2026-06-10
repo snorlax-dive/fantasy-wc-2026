@@ -124,6 +124,19 @@ export function priceFromExpectedPoints(pos: Pos, perMatchPts: number): number {
   return Math.min(PRICE_CEIL, Math.max(PRICE_FLOOR[pos], Math.round(raw * 2) / 2))
 }
 
+// Converts an API-Football position string to the internal Pos type.
+// Handles both broad categories ("Goalkeeper", "Midfielder") and sub-position
+// strings that appear in some API responses ("Defensive Midfielder", "Attacking
+// Midfielder"). "mid" is checked before "def" so "Defensive Midfielder" → MID,
+// not DEF.
+export function mapPosition(p: string | null | undefined): Pos {
+  const s = (p ?? '').toLowerCase()
+  if (s.startsWith('goal') || s === 'g') return 'GK'
+  if (s.includes('mid')) return 'MID'
+  if (s.startsWith('def') || s === 'd') return 'DEF'
+  return 'FWD'
+}
+
 // Classifies a midfielder as ATK (playmaker/winger) or DEF (holding/box-to-box).
 // Used to select the correct goal/assist base rates in priorPointsPerMatch().
 //
