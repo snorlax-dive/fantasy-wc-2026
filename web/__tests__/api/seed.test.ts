@@ -317,6 +317,119 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
     expect(capturedRow!.start_prob as number).toBeGreaterThan(0.75)
   })
 
+  it('60-min denominator: player averaging 63 min/start gets high startProb', async () => {
+    // Player: 10 lineup starts, 10 total appearances, 630 min (63 min/game — Haaland-style).
+    // Old 90-min denom: rawProb = 630/(10*90) = 0.700 → startProb ≈ 0.70 (too low)
+    // New 60-min denom: rawProb = min(1.0, 630/(10*60)) = 1.0  → startProb ≈ 0.91
+    const adminDb = setupAdminDb()
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 1, name: 'Norway', api_team_id: 10 }] }))
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [] }))
+    adminDb.from.mockReturnValueOnce(makeChain({ data: null, error: null }))
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 50, api_player_id: 999, position: 'FWD' }] }))
+
+    let capturedRow: Record<string, unknown> | null = null
+    adminDb.from.mockImplementationOnce(() => {
+      const chain = makeChain({ data: null, error: null })
+      ;(chain as never as { update: ReturnType<typeof vi.fn> }).update = vi.fn((...args: unknown[]) => {
+        capturedRow = args[0] as Record<string, unknown>
+        return chain
+      })
+      ;(chain as never as { eq: ReturnType<typeof vi.fn> }).eq = vi.fn(() => chain)
+      return chain
+    })
+
+    mockApiFootball.mockResolvedValueOnce([{
+      player: { id: 999, name: 'PartialTimeStarter', nationality: 'Norway' },
+      statistics: [{
+        games: { position: 'Forward', number: 9, appearences: 10, lineups: 10, minutes: 630 },
+        goals: { total: 3, assists: 1 },
+        team: { id: 10 },
+      }],
+    }])
+
+    const res = await GET(makeRequest({ step: 'qualifiers' }))
+    expect(res.status).toBe(200)
+    expect(capturedRow).not.toBeNull()
+    // 60-min denominator: rawProb=1.0 → startProb ≈ 0.91 > 0.75
+    // 90-min denominator: rawProb=0.70 → startProb ≈ 0.70 < 0.75
+    expect(capturedRow!.start_prob as number).toBeGreaterThan(0.75)
+  })
+
+  it('nForShrinkage cap: player with 40 lineup starts gets startProb well below clamp', async () => {
+    // Player: 40 lineup starts, 45 sub appearances, 4000 total minutes.
+    // totalMinutes (4000) > lineups*90 (3600), so rawProb clamps to 1.0 with either denominator.
+    // Without cap nForShrinkage=40: (4*sp + 40*1.0)/44 ≈ 0.97 (hits 0.97 clamp).
+    // With cap at MAX_QUALIFIER_MATCHES=10: (4*sp + 10*1.0)/14 ≈ 0.91 (well below clamp).
+    const adminDb = setupAdminDb()
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 1, name: 'Norway', api_team_id: 10 }] }))
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [] }))
+    adminDb.from.mockReturnValueOnce(makeChain({ data: null, error: null }))
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 50, api_player_id: 1, position: 'FWD' }] }))
+
+    let capturedRow: Record<string, unknown> | null = null
+    adminDb.from.mockImplementationOnce(() => {
+      const chain = makeChain({ data: null, error: null })
+      ;(chain as never as { update: ReturnType<typeof vi.fn> }).update = vi.fn((...args: unknown[]) => {
+        capturedRow = args[0] as Record<string, unknown>
+        return chain
+      })
+      ;(chain as never as { eq: ReturnType<typeof vi.fn> }).eq = vi.fn(() => chain)
+      return chain
+    })
+
+    mockApiFootball.mockResolvedValueOnce([{
+      player: { id: 1, name: 'OverloadedQualifier', nationality: 'Norway' },
+      statistics: [{
+        games: { position: 'Forward', number: 9, appearences: 45, lineups: 40, minutes: 4000 },
+        goals: { total: 10, assists: 5 },
+        team: { id: 10 },
+      }],
+    }])
+
+    const res = await GET(makeRequest({ step: 'qualifiers' }))
+    expect(res.status).toBe(200)
+    expect(capturedRow).not.toBeNull()
+    // Cap limits nForShrinkage to 10, preventing uncapped n=40 from forcing startProb to 0.97
+    expect(capturedRow!.start_prob as number).toBeLessThan(0.97)
+  })
+
+  it('rawProb denominator uses uncapped start count: rotational player with 40 low-minute starts gets low startProb', async () => {
+    // Player: 40 lineup starts, 1200 total minutes (30 min/start — rotational, gets subbed early).
+    // Buggy code: rawProb = min(1.0, 1200/(cap*60)) = min(1.0, 1200/600) = 1.0 → startProb ~0.91 (wrong!)
+    // Fixed code: rawProb = min(1.0, 1200/(40*60))  = min(1.0, 0.50) = 0.50 → startProb ~0.55 (correct)
+    const adminDb = setupAdminDb()
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 1, name: 'Norway', api_team_id: 10 }] }))
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [] }))
+    adminDb.from.mockReturnValueOnce(makeChain({ data: null, error: null }))
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 50, api_player_id: 1, position: 'FWD' }] }))
+
+    let capturedRow: Record<string, unknown> | null = null
+    adminDb.from.mockImplementationOnce(() => {
+      const chain = makeChain({ data: null, error: null })
+      ;(chain as never as { update: ReturnType<typeof vi.fn> }).update = vi.fn((...args: unknown[]) => {
+        capturedRow = args[0] as Record<string, unknown>
+        return chain
+      })
+      ;(chain as never as { eq: ReturnType<typeof vi.fn> }).eq = vi.fn(() => chain)
+      return chain
+    })
+
+    mockApiFootball.mockResolvedValueOnce([{
+      player: { id: 1, name: 'RotationalPlayer', nationality: 'Norway' },
+      statistics: [{
+        games: { position: 'Forward', number: 9, appearences: 40, lineups: 40, minutes: 1200 },
+        goals: { total: 2, assists: 1 },
+        team: { id: 10 },
+      }],
+    }])
+
+    const res = await GET(makeRequest({ step: 'qualifiers' }))
+    expect(res.status).toBe(200)
+    expect(capturedRow).not.toBeNull()
+    // rawProb should reflect 30 min/start = 0.50, not the inflated 1.0 from capped denominator
+    expect(capturedRow!.start_prob as number).toBeLessThan(0.75)
+  })
+
   it('startProb clamped to [0.10, 0.97] for 100% start rate', async () => {
     const adminDb = setupAdminDb()
     adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 1, name: 'France', api_team_id: 10 }] }))
