@@ -122,14 +122,31 @@ const XPTS_RANGE: Record<Pos, { min: number; max: number }> = {
 
 const PRICE_SKEW = 1.6
 
+// personalAttack ceiling — same value used in derivePersonalAttack's clamp and as the
+// denominator for the team-relative price ceiling below.
+const MAX_PA = 0.97
+
 // Maps a *per-match* projected-points rate to a price (clamped, nearest 0.5).
 // Keyed off the per-match rate so price reflects player quality independent of
 // how many matches remain in the stage being drafted.
-export function priceFromExpectedPoints(pos: Pos, perMatchPts: number): number {
+//
+// Optional teamAttack: when provided, applies a team-relative price ceiling so that
+// no player on a weak-attack team can exceed the price their team's attack ceiling
+// implies. Formula: PRICE_FLOOR + (PRICE_CEIL - PRICE_FLOOR) × (teamAttack / MAX_PA).
+// This prevents qualifier-inflation from pricing a Qatar striker at the same level as
+// a Brazil striker — their team's attack limits the absolute goal-scoring opportunity.
+export function priceFromExpectedPoints(pos: Pos, perMatchPts: number, teamAttack?: number): number {
   const { min, max } = XPTS_RANGE[pos]
   const t = Math.max(0, Math.min(1, (perMatchPts - min) / (max - min)))
   const raw = PRICE_FLOOR[pos] + (PRICE_CEIL - PRICE_FLOOR[pos]) * Math.pow(t, PRICE_SKEW)
-  return Math.min(PRICE_CEIL, Math.max(PRICE_FLOOR[pos], Math.round(raw * 2) / 2))
+  const price = Math.min(PRICE_CEIL, Math.max(PRICE_FLOOR[pos], Math.round(raw * 2) / 2))
+  if (teamAttack != null) {
+    const fl = PRICE_FLOOR[pos]
+    const rawCeil = fl + (PRICE_CEIL - fl) * (teamAttack / MAX_PA)
+    const teamCeil = Math.min(PRICE_CEIL, Math.round(rawCeil * 2) / 2)
+    return Math.max(fl, Math.min(price, teamCeil))
+  }
+  return price
 }
 
 // Converts an API-Football position string to the internal Pos type.

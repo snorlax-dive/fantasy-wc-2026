@@ -180,7 +180,7 @@ export async function GET(req: Request) {
             team_id: t.id,
             name: p.name,
             position: pos,
-            price: priceFromExpectedPoints(pos, xPts / 3),
+            price: priceFromExpectedPoints(pos, xPts / 3, attack),
             expected_points: Math.round(xPts * 100) / 100,
             photo_url: p.photo ?? null,
             active: true,
@@ -350,7 +350,7 @@ export async function GET(req: Request) {
             })
           }
 
-          const price = priceFromExpectedPoints(pos, xPts / 3)
+          const price = priceFromExpectedPoints(pos, xPts / 3, attack)
           const expected_points = Math.round(xPts * 100) / 100
           playerUpdates.push({ id: our.id, start_prob: startProb, price, expected_points, personal_attack: personalAttack })
 

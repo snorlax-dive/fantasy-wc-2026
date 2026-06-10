@@ -156,7 +156,7 @@ export async function GET(req: Request) {
       } else {
         xPts = projectedPoints({ ...baseInput, matchesExpected, opponentAttack: opponentAttacks[0] })
       }
-      const price = priceFromExpectedPoints(pos, xPts / matchesExpected)
+      const price = priceFromExpectedPoints(pos, xPts / matchesExpected, attack)
       const expected_points = Math.round(xPts * 100) / 100
       updates.push({ id: p.id, price, expected_points })
       if (preview.length < 25) preview.push({ id: p.id, pos, price, expected_points, formMatches: form?.matches ?? 0, opponentAttacks })
