@@ -151,6 +151,20 @@ describe('priceFromExpectedPoints — rounding', () => {
   })
 })
 
+describe('priceFromExpectedPoints — range recalibration', () => {
+  it('FWD at 3.4 xPts/match hits top price tier (XPTS_RANGE.FWD.max=3.5)', () => {
+    // Old max=3.8: t=(3.4-1.0)/2.8=0.857 → raw≈11.37 → £11.5 (too low for elite FWD)
+    // New max=3.5: t=(3.4-1.0)/2.5=0.960 → raw≈12.93 → £13.0
+    expect(priceFromExpectedPoints('FWD', 3.4)).toBeGreaterThanOrEqual(13.0)
+  })
+
+  it('MID at 3.0 xPts/match no longer near ceiling (XPTS_RANGE.MID.max=3.6)', () => {
+    // Old max=3.2: t=(3.0-0.8)/2.4=0.917 → raw≈12.33 → £12.5 (overcrowded at top)
+    // New max=3.6: t=(3.0-0.8)/2.8=0.786 → raw≈10.62 → £10.5
+    expect(priceFromExpectedPoints('MID', 3.0)).toBeLessThan(12.0)
+  })
+})
+
 describe('priceFromExpectedPoints — monotonicity', () => {
   it('higher xPts → same or higher price (same position)', () => {
     for (const pos of ['GK', 'DEF', 'MID', 'FWD'] as const) {
@@ -285,6 +299,18 @@ describe('derivePersonalAttack', () => {
         expect(r).toBeLessThanOrEqual(0.97)
       }
     }
+  })
+
+  it('CONCACAF-style large sample (40 games) is capped: personal_attack stays close to teamAttack', () => {
+    // 13 goals + 6 assists in 3600 min (40 games) → implied ≈ 0.82.
+    // Without cap (n=40): shrunk ≈ 0.768 (large evidence pulls far from teamAttack=0.50).
+    // With cap at MAX_QUALIFIER_MATCHES=10: shrunk ≈ 0.679 (closer to teamAttack).
+    const result = derivePersonalAttack('FWD', 0.50, {
+      totalGoals: 13, totalAssists: 6, totalMinutes: 3600, totalAppearances: 40,
+    })
+    expect(result).not.toBeNull()
+    // Cap brings result below 0.70; uncapped would give ~0.768
+    expect(result!).toBeLessThan(0.70)
   })
 })
 

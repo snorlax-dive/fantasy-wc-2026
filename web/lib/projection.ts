@@ -19,6 +19,10 @@
 import type { Pos } from './scoring'
 import { GOAL_PTS } from './scoring'
 
+// Maximum qualifier matches counted as evidence for startProb and personalAttack shrinkage.
+// Caps CONCACAF-style over-sampling (40+ games over multiple rounds vs UEFA's ~10).
+export const MAX_QUALIFIER_MATCHES = 10
+
 export type ProjectionInput = {
   pos: Pos
   attack: number          // 0..1 — team's attacking quality (drives goals/assists)
@@ -103,13 +107,15 @@ const PRICE_CEIL = 13.5
 
 // Calibrated per-match xPts range for each position — derived from running the model
 // at realistic (attack/defense/startProb) extremes across the 48-team field.
-// FWD max raised 3.2→3.8 to accommodate the higher achievable xPts after the
-// BASE_GOAL_RATE/BASE_ASSIST_RATE calibration.
+// MID max raised 3.2→3.6 (actual ATK MID ceiling ~3.64; old value compressed top MIDs).
+// FWD max lowered 3.8→3.5 (old value was set before startProb could reach 0.87+;
+// now that 60-min denominator lifts elite FWDs, the ceiling must come down so the
+// top of the range isn't dead space).
 const XPTS_RANGE: Record<Pos, { min: number; max: number }> = {
   GK:  { min: 1.5, max: 3.5 },
   DEF: { min: 1.0, max: 3.5 },
-  MID: { min: 0.8, max: 3.2 },
-  FWD: { min: 1.0, max: 3.8 },
+  MID: { min: 0.8, max: 3.6 },
+  FWD: { min: 1.0, max: 3.5 },
 }
 
 const PRICE_SKEW = 1.6
@@ -196,10 +202,10 @@ export function derivePersonalAttack(
   const implied  = ptsPer90 / modelRate
 
   // Shrink toward team attack: need strong evidence to deviate from team rating.
-  // Use minutes/90 (full-game equivalents) as sample size so short cameos (high
-  // per-90 rate from tiny minutes) don't drive personal_attack to the clamp.
+  // Use minutes/90 (full-game equivalents) capped at MAX_QUALIFIER_MATCHES so that
+  // CONCACAF-style large qualifier samples (40+ games) don't dominate the shrinkage.
   const w = 8
-  const n = observed.totalMinutes / 90
+  const n = Math.min(observed.totalMinutes / 90, MAX_QUALIFIER_MATCHES)
   const shrunk = (w * teamAttack + n * implied) / (w + n)
   return Math.min(0.97, Math.max(0.10, shrunk))
 }

@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { apiFootball, WORLD_CUP_LEAGUE, SEASON } from '@/lib/apiFootball'
 import { teamRatings } from '@/lib/teamStrength'
-import { projectedPointsPerMatch, projectedPoints, priceFromExpectedPoints, derivePersonalAttack, inferMidRole, mapPosition, startProbFor } from '@/lib/projection'
+import { projectedPointsPerMatch, projectedPoints, priceFromExpectedPoints, derivePersonalAttack, inferMidRole, mapPosition, startProbFor, MAX_QUALIFIER_MATCHES } from '@/lib/projection'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -315,16 +315,19 @@ export async function GET(req: Request) {
             : undefined
 
           // Use lineup starts as the rawProb denominator when available: measures
-          // "average fraction of 90 min played per start" rather than per appearance,
-          // avoiding the penalty for sub appearances that dragged down star FWDs/MIDs.
-          // Use lineups count as the shrinkage sample size so sub-only games don't
-          // dilute the evidence base.
+          // "average fraction of 60 min played per start" (P(plays 60+) rather than
+          // P(plays full 90)), avoiding the penalty for star FWDs/MIDs who start every
+          // game but get subbed off at 60–75 min.
+          // Cap at MAX_QUALIFIER_MATCHES so CONCACAF-style over-sampling (40+ games)
+          // doesn't push startProb toward the 0.97 clamp via sheer volume.
           const shirtBasedProb = startProbFor(apiId, shirtNumber)
-          const nForShrinkage = totalLineups > 0 ? totalLineups : totalAppearances
-          // Clamp to 1.0: sub appearances add minutes without adding lineup starts,
-          // so totalMinutes can exceed nForShrinkage*90, making rawProb > 1.0 and
-          // pushing multiple elite players to the 0.97 clamp, losing differentiation.
-          const rawProb = Math.min(1.0, totalMinutes / (nForShrinkage * 90))
+          const nForShrinkage = Math.min(
+            totalLineups > 0 ? totalLineups : totalAppearances,
+            MAX_QUALIFIER_MATCHES,
+          )
+          // 60-min denominator: rawProb = P(plays ≥60 min per lineup start).
+          // Clamp to 1.0: extra sub minutes can push totalMinutes above nForShrinkage*60.
+          const rawProb = Math.min(1.0, totalMinutes / (nForShrinkage * 60))
           const wSp = 4
           const startProb = Math.min(0.97, Math.max(0.10,
             (wSp * shirtBasedProb + nForShrinkage * rawProb) / (wSp + nForShrinkage)
