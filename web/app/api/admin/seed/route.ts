@@ -321,7 +321,10 @@ export async function GET(req: Request) {
           // dilute the evidence base.
           const shirtBasedProb = startProbFor(apiId, shirtNumber)
           const nForShrinkage = totalLineups > 0 ? totalLineups : totalAppearances
-          const rawProb = totalMinutes / (nForShrinkage * 90)
+          // Clamp to 1.0: sub appearances add minutes without adding lineup starts,
+          // so totalMinutes can exceed nForShrinkage*90, making rawProb > 1.0 and
+          // pushing multiple elite players to the 0.97 clamp, losing differentiation.
+          const rawProb = Math.min(1.0, totalMinutes / (nForShrinkage * 90))
           const wSp = 4
           const startProb = Math.min(0.97, Math.max(0.10,
             (wSp * shirtBasedProb + nForShrinkage * rawProb) / (wSp + nForShrinkage)

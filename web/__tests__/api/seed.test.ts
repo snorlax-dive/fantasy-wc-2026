@@ -280,7 +280,8 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
     // Player: 9 lineup starts (full-game starter), 15 total appearances (6 sub apps).
     // Total minutes: 9*90 + 6*15 = 810+90 = 900.
     // Old formula: rawProb = 900/(15*90) = 0.667, N=15 → startProb ≈ 0.62
-    // New formula: rawProb = 900/(9*90) = 1.0,  N=9  → startProb ≈ 0.85+
+    // New formula: rawProb = min(1.0, 900/810) = 1.0, N=9  → startProb ≈ 0.85+
+    //   (sub minutes push 900 > 810, so clamping rawProb to 1.0 is required)
     // The new startProb must be > 0.75 to prove the lineups path is used.
     const adminDb = setupAdminDb()
     adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 1, name: 'Norway', api_team_id: 10 }] }))
