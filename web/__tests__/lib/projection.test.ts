@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { projectedPointsPerMatch, projectedPoints, priceFromExpectedPoints, derivePersonalAttack, inferMidRole, mapPosition } from '@/lib/projection'
+import { projectedPointsPerMatch, projectedPoints, priceFromExpectedPoints, derivePersonalAttack, inferMidRole, mapPosition, startProbFor } from '@/lib/projection'
 import type { ProjectionInput } from '@/lib/projection'
 
 const base = (): ProjectionInput => ({
@@ -358,4 +358,67 @@ describe('mapPosition — edge cases', () => {
   it('empty string → FWD (catch-all)', () => expect(mapPosition('')).toBe('FWD'))
   it('case-insensitive: "midfielder" → MID', () => expect(mapPosition('midfielder')).toBe('MID'))
   it('case-insensitive: "GOALKEEPER" → GK', () => expect(mapPosition('GOALKEEPER')).toBe('GK'))
+})
+
+// ---------------------------------------------------------------------------
+// inferMidRole — goal-only ATK fallback (Fix: catches null-assist API data)
+// ---------------------------------------------------------------------------
+describe('inferMidRole — goal-rate fallback when assists are null', () => {
+  it('Bellingham scenario: 2 goals + 0 assists in 12 apps → ATK (goals/app=0.167 ≥ 0.10)', () => {
+    // API-Football sometimes returns null assists; goals/app ≥ 0.10 is the fallback
+    // Old: (2+0)/12 = 0.167 < 0.20 → DEF. New: goals/app 0.167 ≥ 0.10 → ATK
+    expect(inferMidRole(22, { goals: 2, assists: 0, appearances: 12 })).toBe('ATK')
+  })
+
+  it('goal rate just below fallback threshold (1 goal in 12 apps) → DEF', () => {
+    expect(inferMidRole(22, { goals: 1, assists: 0, appearances: 12 })).toBe('DEF')
+  })
+
+  it('G+A threshold still catches assists-rich players (0 goals + 3 assists in 10 apps)', () => {
+    // 0/10=0% goals but (0+3)/10=0.30 ≥ 0.20 → ATK via original G+A check
+    expect(inferMidRole(22, { goals: 0, assists: 3, appearances: 10 })).toBe('ATK')
+  })
+
+  it('goal-only check requires ≥ 5 appearances (same guard as G+A check)', () => {
+    expect(inferMidRole(22, { goals: 2, assists: 0, appearances: 4 })).toBe('DEF')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// startProbFor — shirt-number prior with WC floor
+// ---------------------------------------------------------------------------
+describe('startProbFor — shirt-number prior', () => {
+  it('shirt #1 → high prior (GK, well above floor)', () => {
+    expect(startProbFor(730, 1)).toBeGreaterThanOrEqual(0.65)
+  })
+
+  it('shirt #9 → prior in sensible range [0.40, 0.90]', () => {
+    const p = startProbFor(1100, 9) // Haaland's API id
+    expect(p).toBeGreaterThanOrEqual(0.40)
+    expect(p).toBeLessThanOrEqual(0.90)
+  })
+
+  it('shirt #22 never falls below 0.40 floor regardless of hash', () => {
+    // Bellingham (#22 England) had prior 0.269 before fix — far too low for a WC starter
+    // Test multiple API IDs to cover the hash distribution
+    for (const id of [129718, 1, 999999, 50000, 200000]) {
+      expect(startProbFor(id, 22)).toBeGreaterThanOrEqual(0.40)
+    }
+  })
+
+  it('shirt #26 → floor holds at extreme high shirt numbers', () => {
+    for (const id of [386828, 99999, 777777]) {
+      expect(startProbFor(id, 26)).toBeGreaterThanOrEqual(0.40)
+    }
+  })
+
+  it('lower shirt → same or higher prior (monotonic above floor)', () => {
+    // Shirt #5 should be ≥ shirt #20 for the same player ID
+    expect(startProbFor(1000, 5)).toBeGreaterThanOrEqual(startProbFor(1000, 20))
+  })
+
+  it('null/undefined shirt → default prior ≥ 0.40', () => {
+    expect(startProbFor(12345, null)).toBeGreaterThanOrEqual(0.40)
+    expect(startProbFor(12345, undefined)).toBeGreaterThanOrEqual(0.40)
+  })
 })

@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { apiFootball, WORLD_CUP_LEAGUE, SEASON } from '@/lib/apiFootball'
 import { teamRatings } from '@/lib/teamStrength'
-import { projectedPointsPerMatch, projectedPoints, priceFromExpectedPoints, derivePersonalAttack, inferMidRole, mapPosition } from '@/lib/projection'
+import { projectedPointsPerMatch, projectedPoints, priceFromExpectedPoints, derivePersonalAttack, inferMidRole, mapPosition, startProbFor } from '@/lib/projection'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -38,16 +38,6 @@ function mapStage(round: string): 'GROUP' | 'R32' | 'R16' | 'QF' | 'SF' | 'FINAL
   if (s.includes('quarter')) return 'QF'
   if (s.includes('semi')) return 'SF'
   return 'FINAL' // final + third-place
-}
-
-// Estimates "probability of starting / playing 60+ minutes" from the squad-list
-// shirt number (lower numbers skew toward first-choice players at a World Cup)
-// blended with a stable per-player hash for within-squad differentiation.
-// 70/30 weight: shirt number is the stronger signal; hash provides individual noise.
-function startProbFor(apiPlayerId: number, shirtNumber: number | null | undefined): number {
-  const h = (((apiPlayerId * 2654435761) >>> 0) % 1000) / 1000 // deterministic 0..1
-  const ns = shirtNumber && shirtNumber >= 1 ? Math.max(0, Math.min(1, (27 - shirtNumber) / 26)) : 0.5
-  return 0.15 + 0.75 * (0.7 * ns + 0.3 * h)
 }
 
 
@@ -304,11 +294,13 @@ export async function GET(req: Request) {
 
           let totalMinutes = 0
           let totalAppearances = 0
+          let totalLineups = 0
           let totalGoals = 0
           let totalAssists = 0
           for (const s of stats) {
             totalMinutes += s.games?.minutes ?? 0
             totalAppearances += s.games?.appearences ?? 0
+            totalLineups += s.games?.lineups ?? 0
             totalGoals += s.goals?.total ?? 0
             totalAssists += s.goals?.assists ?? 0
           }
@@ -322,13 +314,17 @@ export async function GET(req: Request) {
             ? inferMidRole(shirtNumber, { goals: totalGoals, assists: totalAssists, appearances: totalAppearances })
             : undefined
 
-          // Shrink qualifier-derived startProb toward shirt-number prior (w=4) to protect
-          // against elite players with sparse qualifier participation (injury, rotation).
+          // Use lineup starts as the rawProb denominator when available: measures
+          // "average fraction of 90 min played per start" rather than per appearance,
+          // avoiding the penalty for sub appearances that dragged down star FWDs/MIDs.
+          // Use lineups count as the shrinkage sample size so sub-only games don't
+          // dilute the evidence base.
           const shirtBasedProb = startProbFor(apiId, shirtNumber)
-          const rawProb = totalMinutes / (totalAppearances * 90)
+          const nForShrinkage = totalLineups > 0 ? totalLineups : totalAppearances
+          const rawProb = totalMinutes / (nForShrinkage * 90)
           const wSp = 4
           const startProb = Math.min(0.97, Math.max(0.10,
-            (wSp * shirtBasedProb + totalAppearances * rawProb) / (wSp + totalAppearances)
+            (wSp * shirtBasedProb + nForShrinkage * rawProb) / (wSp + nForShrinkage)
           ))
 
           const personalAttack = derivePersonalAttack(pos, attack, {

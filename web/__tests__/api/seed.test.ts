@@ -276,6 +276,46 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
     expect(capturedRow!.personal_attack).toBeNull()
   })
 
+  it('games.lineups used as rawProb denominator: genuine starter with sub appearances gets higher startProb', async () => {
+    // Player: 9 lineup starts (full-game starter), 15 total appearances (6 sub apps).
+    // Total minutes: 9*90 + 6*15 = 810+90 = 900.
+    // Old formula: rawProb = 900/(15*90) = 0.667, N=15 → startProb ≈ 0.62
+    // New formula: rawProb = 900/(9*90) = 1.0,  N=9  → startProb ≈ 0.85+
+    // The new startProb must be > 0.75 to prove the lineups path is used.
+    const adminDb = setupAdminDb()
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 1, name: 'Norway', api_team_id: 10 }] }))
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [] })) // allGroupFx
+    adminDb.from.mockReturnValueOnce(makeChain({ data: null, error: null })) // personal_attack probe
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 50, api_player_id: 999, position: 'FWD' }] }))
+
+    let capturedRow: Record<string, unknown> | null = null
+    adminDb.from.mockImplementationOnce(() => {
+      const chain = makeChain({ data: null, error: null })
+      ;(chain as never as { update: ReturnType<typeof vi.fn> }).update = vi.fn((...args: unknown[]) => {
+        capturedRow = args[0] as Record<string, unknown>
+        return chain
+      })
+      ;(chain as never as { eq: ReturnType<typeof vi.fn> }).eq = vi.fn(() => chain)
+      return chain
+    })
+
+    mockApiFootball.mockResolvedValueOnce([{
+      player: { id: 999, name: 'FullTimeStarter', nationality: 'Norway' },
+      statistics: [{
+        games: { position: 'Forward', number: 9, appearences: 15, lineups: 9, minutes: 900 },
+        goals: { total: 3, assists: 1 },
+        team: { id: 10 },
+      }],
+    }])
+
+    const res = await GET(makeRequest({ step: 'qualifiers' }))
+    expect(res.status).toBe(200)
+    expect(capturedRow).not.toBeNull()
+    // startProb > 0.75 proves the lineups path drove the rawProb up;
+    // the appearances-only path would give ≈ 0.62
+    expect(capturedRow!.start_prob as number).toBeGreaterThan(0.75)
+  })
+
   it('startProb clamped to [0.10, 0.97] for 100% start rate', async () => {
     const adminDb = setupAdminDb()
     adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 1, name: 'France', api_team_id: 10 }] }))
