@@ -314,20 +314,15 @@ export async function GET(req: Request) {
             ? inferMidRole(shirtNumber, { goals: totalGoals, assists: totalAssists, appearances: totalAppearances })
             : undefined
 
-          // Use lineup starts as the rawProb denominator when available: measures
-          // "average fraction of 60 min played per start" (P(plays 60+) rather than
-          // P(plays full 90)), avoiding the penalty for star FWDs/MIDs who start every
-          // game but get subbed off at 60–75 min.
-          // Cap at MAX_QUALIFIER_MATCHES so CONCACAF-style over-sampling (40+ games)
-          // doesn't push startProb toward the 0.97 clamp via sheer volume.
+          // rawProb = P(plays ≥60 min per lineup start). Use the true (uncapped) start
+          // count in the denominator so the per-game rate is accurate for high-game-count
+          // players. nForShrinkage is separately capped so CONCACAF over-sampling (40+
+          // games) doesn't dominate the shrinkage weight by sheer volume.
           const shirtBasedProb = startProbFor(apiId, shirtNumber)
-          const nForShrinkage = Math.min(
-            totalLineups > 0 ? totalLineups : totalAppearances,
-            MAX_QUALIFIER_MATCHES,
-          )
-          // 60-min denominator: rawProb = P(plays ≥60 min per lineup start).
-          // Clamp to 1.0: extra sub minutes can push totalMinutes above nForShrinkage*60.
-          const rawProb = Math.min(1.0, totalMinutes / (nForShrinkage * 60))
+          const nRaw = totalLineups > 0 ? totalLineups : totalAppearances
+          const nForShrinkage = Math.min(nRaw, MAX_QUALIFIER_MATCHES)
+          // Clamp to 1.0: sub minutes can push totalMinutes above nRaw*60.
+          const rawProb = Math.min(1.0, totalMinutes / (nRaw * 60))
           const wSp = 4
           const startProb = Math.min(0.97, Math.max(0.10,
             (wSp * shirtBasedProb + nForShrinkage * rawProb) / (wSp + nForShrinkage)

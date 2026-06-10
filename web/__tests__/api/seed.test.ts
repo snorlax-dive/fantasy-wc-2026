@@ -393,6 +393,43 @@ describe('GET /api/admin/seed — step=qualifiers', () => {
     expect(capturedRow!.start_prob as number).toBeLessThan(0.97)
   })
 
+  it('rawProb denominator uses uncapped start count: rotational player with 40 low-minute starts gets low startProb', async () => {
+    // Player: 40 lineup starts, 1200 total minutes (30 min/start — rotational, gets subbed early).
+    // Buggy code: rawProb = min(1.0, 1200/(cap*60)) = min(1.0, 1200/600) = 1.0 → startProb ~0.91 (wrong!)
+    // Fixed code: rawProb = min(1.0, 1200/(40*60))  = min(1.0, 0.50) = 0.50 → startProb ~0.55 (correct)
+    const adminDb = setupAdminDb()
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 1, name: 'Norway', api_team_id: 10 }] }))
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [] }))
+    adminDb.from.mockReturnValueOnce(makeChain({ data: null, error: null }))
+    adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 50, api_player_id: 1, position: 'FWD' }] }))
+
+    let capturedRow: Record<string, unknown> | null = null
+    adminDb.from.mockImplementationOnce(() => {
+      const chain = makeChain({ data: null, error: null })
+      ;(chain as never as { update: ReturnType<typeof vi.fn> }).update = vi.fn((...args: unknown[]) => {
+        capturedRow = args[0] as Record<string, unknown>
+        return chain
+      })
+      ;(chain as never as { eq: ReturnType<typeof vi.fn> }).eq = vi.fn(() => chain)
+      return chain
+    })
+
+    mockApiFootball.mockResolvedValueOnce([{
+      player: { id: 1, name: 'RotationalPlayer', nationality: 'Norway' },
+      statistics: [{
+        games: { position: 'Forward', number: 9, appearences: 40, lineups: 40, minutes: 1200 },
+        goals: { total: 2, assists: 1 },
+        team: { id: 10 },
+      }],
+    }])
+
+    const res = await GET(makeRequest({ step: 'qualifiers' }))
+    expect(res.status).toBe(200)
+    expect(capturedRow).not.toBeNull()
+    // rawProb should reflect 30 min/start = 0.50, not the inflated 1.0 from capped denominator
+    expect(capturedRow!.start_prob as number).toBeLessThan(0.75)
+  })
+
   it('startProb clamped to [0.10, 0.97] for 100% start rate', async () => {
     const adminDb = setupAdminDb()
     adminDb.from.mockReturnValueOnce(makeChain({ data: [{ id: 1, name: 'France', api_team_id: 10 }] }))
