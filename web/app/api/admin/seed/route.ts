@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { apiFootball, WORLD_CUP_LEAGUE, SEASON } from '@/lib/apiFootball'
 import { teamRatings } from '@/lib/teamStrength'
-import { projectedPointsPerMatch, projectedPoints, priceFromExpectedPoints, derivePersonalAttack } from '@/lib/projection'
+import { projectedPointsPerMatch, projectedPoints, priceFromExpectedPoints, derivePersonalAttack, inferMidRole } from '@/lib/projection'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -31,9 +31,10 @@ type Pos = 'GK' | 'DEF' | 'MID' | 'FWD'
 
 function mapPosition(p: string | null | undefined): Pos {
   const s = (p ?? '').toLowerCase()
-  if (s.startsWith('goal')) return 'GK'
-  if (s.startsWith('def')) return 'DEF'
-  if (s.startsWith('mid')) return 'MID'
+  if (s.startsWith('goal') || s === 'g') return 'GK'
+  // "Defensive Midfielder" starts with "def" but is still a MID — check for "mid" first
+  if (s.includes('mid') || s.includes('midfielder')) return 'MID'
+  if (s.startsWith('def') || s === 'd') return 'DEF'
   return 'FWD'
 }
 
@@ -55,13 +56,6 @@ function startProbFor(apiPlayerId: number, shirtNumber: number | null | undefine
   const h = (((apiPlayerId * 2654435761) >>> 0) % 1000) / 1000 // deterministic 0..1
   const ns = shirtNumber && shirtNumber >= 1 ? Math.max(0, Math.min(1, (27 - shirtNumber) / 26)) : 0.5
   return 0.15 + 0.75 * (0.7 * ns + 0.3 * h)
-}
-
-// Attacking vs defensive mid inference from shirt number (no API sub-type available).
-// Shirts 8-11: typically AMs / box-to-box / wingers — higher goal/assist projection.
-// All others: holding/utility mids — lower goal projection, more defensive role.
-function inferMidRole(shirt: number | null | undefined): 'ATK' | 'DEF' {
-  return shirt != null && shirt >= 8 && shirt <= 11 ? 'ATK' : 'DEF'
 }
 
 
@@ -332,7 +326,9 @@ export async function GET(req: Request) {
           // Use shirt number from stats so role classification is consistent across
           // steps and re-running qualifiers doesn't cause price churn.
           const shirtNumber = (stats[0] ?? entry.statistics?.[0])?.games?.number ?? null
-          const midRole = pos === 'MID' ? inferMidRole(shirtNumber) : undefined
+          const midRole = pos === 'MID'
+            ? inferMidRole(shirtNumber, { goals: totalGoals, assists: totalAssists, appearances: totalAppearances })
+            : undefined
 
           // Shrink qualifier-derived startProb toward shirt-number prior (w=4) to protect
           // against elite players with sparse qualifier participation (injury, rotation).

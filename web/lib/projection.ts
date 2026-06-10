@@ -124,6 +124,27 @@ export function priceFromExpectedPoints(pos: Pos, perMatchPts: number): number {
   return Math.min(PRICE_CEIL, Math.max(PRICE_FLOOR[pos], Math.round(raw * 2) / 2))
 }
 
+// Classifies a midfielder as ATK (playmaker/winger) or DEF (holding/box-to-box).
+// Used to select the correct goal/assist base rates in priorPointsPerMatch().
+//
+// Priority:
+//  1. Shirt 8–11 → ATK (strong prior: 10 = playmaker, 8/11 = box-to-box/winger)
+//  2. qualStats: if observed G+A rate ≥ 0.20/appearance over ≥ 5 apps → ATK
+//     (catches Bellingham #22, De Bruyne #7, Pedri #26 who don't wear canonical numbers)
+//  3. Default → DEF
+export function inferMidRole(
+  shirt: number | null | undefined,
+  qualStats?: { goals: number; assists: number; appearances: number },
+): 'ATK' | 'DEF' {
+  if (shirt != null && shirt >= 8 && shirt <= 11) return 'ATK'
+  if (
+    qualStats &&
+    qualStats.appearances >= 5 &&
+    (qualStats.goals + qualStats.assists) / qualStats.appearances >= 0.20
+  ) return 'ATK'
+  return 'DEF'
+}
+
 // Derives a per-player personal_attack (0.10–0.97) from observed qualifier
 // goals and assists, shrunk toward team attack via empirical-Bayes (w=8).
 // Returns null for GK/DEF (too few goals/assists to be a meaningful signal)

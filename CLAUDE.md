@@ -169,7 +169,7 @@ is the privilege flag checked everywhere admin/commissioner-only behavior is gat
 ### App structure
 Standard Next.js App Router: each top-level feature is a route segment under `app/` (e.g. `predictions/`,
 `squad/`, `blocks/`, `bracket/`, `leaderboard/`, `players/`, `season/`, `recap/`, `live/`, `match/[id]/`,
-`admin/**`). The common pattern per feature is `page.tsx` (server component: auth + data fetch) +
+`achievements/`, `admin/**`). The common pattern per feature is `page.tsx` (server component: auth + data fetch) +
 `actions.ts` (server actions, mutate via the server/admin Supabase client, enforce lock-time and
 ownership) + an interactive client component (e.g. `squad-builder.tsx`, `predictions-board.tsx`,
 `blocks-board.tsx`, `bracket-board.tsx`).
@@ -182,6 +182,13 @@ ownership) + an interactive client component (e.g. `squad-builder.tsx`, `predict
 `app/admin/results/` — commissioner-only manual result entry: set match scores, mark finished, and
 save per-player stats directly (fallback when API-Football polling is wrong or missing). After saving
 results here, run `/api/admin/score` to recompute points.
+
+`app/admin/managers/` — commissioner-only user management page: view all registered profiles, toggle
+`is_commissioner`, inspect per-user settings. Uses `createAdminClient()` (bypasses RLS) because profiles
+are not publicly readable.
+
+`app/achievements/` — per-user personal stats page (squad history, top scorers, prediction streaks).
+Read-only; uses the regular server client with RLS (own-row reads only).
 
 `app/recap/card/route.tsx` — dynamic OG image route (ImageResponse) for the shareable recap card;
 does not render HTML.

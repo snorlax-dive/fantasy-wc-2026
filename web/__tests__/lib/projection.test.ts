@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { projectedPointsPerMatch, projectedPoints, priceFromExpectedPoints, derivePersonalAttack } from '@/lib/projection'
+import { projectedPointsPerMatch, projectedPoints, priceFromExpectedPoints, derivePersonalAttack, inferMidRole } from '@/lib/projection'
 import type { ProjectionInput } from '@/lib/projection'
 
 const base = (): ProjectionInput => ({
@@ -285,5 +285,52 @@ describe('derivePersonalAttack', () => {
         expect(r).toBeLessThanOrEqual(0.97)
       }
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// inferMidRole — shirt-number heuristic (no stats)
+// ---------------------------------------------------------------------------
+describe('inferMidRole — shirt-number heuristic (no stats)', () => {
+  it('shirt 8 → ATK', () => expect(inferMidRole(8)).toBe('ATK'))
+  it('shirt 9 → ATK', () => expect(inferMidRole(9)).toBe('ATK'))
+  it('shirt 10 → ATK', () => expect(inferMidRole(10)).toBe('ATK'))
+  it('shirt 11 → ATK', () => expect(inferMidRole(11)).toBe('ATK'))
+  it('shirt 7 → DEF (below ATK range)', () => expect(inferMidRole(7)).toBe('DEF'))
+  it('shirt 22 → DEF (high number)', () => expect(inferMidRole(22)).toBe('DEF'))
+  it('null shirt → DEF', () => expect(inferMidRole(null)).toBe('DEF'))
+  it('undefined shirt → DEF', () => expect(inferMidRole(undefined)).toBe('DEF'))
+})
+
+// ---------------------------------------------------------------------------
+// inferMidRole — qualifier-stats upgrade to ATK
+// ---------------------------------------------------------------------------
+describe('inferMidRole — qualifier stats upgrade to ATK', () => {
+  it('Bellingham-style: shirt #22 with high G+A rate → ATK', () => {
+    // 15 combined in 30 games = 0.50/game
+    expect(inferMidRole(22, { goals: 9, assists: 6, appearances: 30 })).toBe('ATK')
+  })
+
+  it('De Bruyne-style: shirt #7 with high G+A rate → ATK', () => {
+    // 20 combined in 35 games = 0.57/game
+    expect(inferMidRole(7, { goals: 5, assists: 15, appearances: 35 })).toBe('ATK')
+  })
+
+  it('Rodri-style: low G+A rate → DEF despite large sample', () => {
+    // 7 combined in 40 games = 0.175/game — below the ATK threshold
+    expect(inferMidRole(16, { goals: 3, assists: 4, appearances: 40 })).toBe('DEF')
+  })
+
+  it('high G+A rate but fewer than 5 appearances → DEF (insufficient sample)', () => {
+    expect(inferMidRole(22, { goals: 3, assists: 3, appearances: 4 })).toBe('DEF')
+  })
+
+  it('shirt in ATK range → ATK regardless of zero stats', () => {
+    expect(inferMidRole(10, { goals: 0, assists: 0, appearances: 20 })).toBe('ATK')
+  })
+
+  it('no qualStats provided → falls back to shirt-number only', () => {
+    expect(inferMidRole(22, undefined)).toBe('DEF')
+    expect(inferMidRole(10, undefined)).toBe('ATK')
   })
 })
