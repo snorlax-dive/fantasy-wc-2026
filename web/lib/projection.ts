@@ -206,8 +206,12 @@ export function derivePersonalAttack(
   // Shrink toward team attack: need strong evidence to deviate from team rating.
   // Use minutes/90 (full-game equivalents) capped at MAX_QUALIFIER_MATCHES so that
   // CONCACAF-style large qualifier samples (40+ games) don't dominate the shrinkage.
-  const w = 8
+  // w=16 (vs old 8) reduces qualifier data weight from 56% to 38%, dampening inflation
+  // from games against weak AFC/CONCACAF opponents.
+  const w = 16
   const n = Math.min(observed.totalMinutes / 90, MAX_QUALIFIER_MATCHES)
   const shrunk = (w * teamAttack + n * implied) / (w + n)
-  return Math.min(0.97, Math.max(0.10, shrunk))
+  // Floor at teamAttack so sparse/unlucky qualifier data never pulls a player below
+  // their own team's baseline (e.g. Haaland on Norway 0.80 can't shrink below 0.80).
+  return Math.min(0.97, Math.max(teamAttack, shrunk))
 }

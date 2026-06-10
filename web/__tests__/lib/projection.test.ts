@@ -252,13 +252,27 @@ describe('derivePersonalAttack', () => {
     expect(result).toBe(0.97)
   })
 
-  it('zero scorer: personal_attack below team attack (zero observed goals pull the shrunk estimate below team rating)', () => {
+  it('teamAttack floor: zero-scorer on strong team gets personalAttack at teamAttack level', () => {
+    // Zero goals/assists shrinks toward 0 → raw shrunk falls below teamAttack.
+    // With floor at 0.10 (old): returned ~0.356 (below Norway's 0.80)
+    // With floor at teamAttack (new): returns max(0.80, 0.356) = 0.80
     const result = derivePersonalAttack('FWD', 0.8, {
       totalGoals: 0, totalAssists: 0, totalMinutes: 900, totalAppearances: 10,
     })
     expect(result).not.toBeNull()
-    expect(result!).toBeLessThan(0.8)
-    expect(result!).toBeGreaterThanOrEqual(0.10)
+    expect(result!).toBeGreaterThanOrEqual(0.8)
+    expect(result!).toBeLessThanOrEqual(0.97)
+  })
+
+  it('weak-team FWD with above-average qualifier goals: w=16 dampens inflation (Qatar scenario)', () => {
+    // 6 goals + 2 assists in 10 game-equivalents → implied ≈ 1.41
+    // w=8:  shrunk = (8×0.52 + 10×1.41) / 18 = 1.016 → clamps to 0.97 (too high for Qatar player)
+    // w=16: shrunk = (16×0.52 + 10×1.41) / 26 = 0.863 (realistic)
+    const result = derivePersonalAttack('FWD', 0.52, {
+      totalGoals: 6, totalAssists: 2, totalMinutes: 900, totalAppearances: 10,
+    })
+    expect(result).not.toBeNull()
+    expect(result!).toBeLessThan(0.97)
   })
 
   it('1 goal in 1 minute does not clamp personal_attack (minutes-based shrinkage)', () => {
