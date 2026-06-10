@@ -314,10 +314,12 @@ export async function GET(req: Request) {
             ? inferMidRole(shirtNumber, { goals: totalGoals, assists: totalAssists, appearances: totalAppearances })
             : undefined
 
-          // rawProb = P(plays ≥60 min per lineup start). Use the true (uncapped) start
-          // count in the denominator so the per-game rate is accurate for high-game-count
-          // players. nForShrinkage is separately capped so CONCACAF over-sampling (40+
-          // games) doesn't dominate the shrinkage weight by sheer volume.
+          // rawProb is a minutes-based proxy: average minutes per start ÷ 60, clamped
+          // to 1.0. A player averaging 65 min/start scores ~1.0; one averaging 30 min/start
+          // scores 0.50. Not a true conditional probability (we only have totals, not
+          // per-match distributions), but a well-calibrated heuristic for the 60-min target.
+          // nRaw (uncapped) is used in the denominator so the rate is accurate regardless of
+          // game count; nForShrinkage (capped) limits the shrinkage weight separately.
           const shirtBasedProb = startProbFor(apiId, shirtNumber)
           const nRaw = totalLineups > 0 ? totalLineups : totalAppearances
           const nForShrinkage = Math.min(nRaw, MAX_QUALIFIER_MATCHES)

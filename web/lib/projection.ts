@@ -19,8 +19,10 @@
 import type { Pos } from './scoring'
 import { GOAL_PTS } from './scoring'
 
-// Maximum qualifier matches counted as evidence for startProb and personalAttack shrinkage.
-// Caps CONCACAF-style over-sampling (40+ games over multiple rounds vs UEFA's ~10).
+// Maximum qualifier match-equivalents counted as evidence for startProb and personalAttack
+// shrinkage. Used for both literal start counts (seed route) and minutes/90 equivalents
+// (derivePersonalAttack). Caps CONCACAF-style over-sampling (~42 game-equivalents over
+// 4 rounds vs UEFA's ~10).
 export const MAX_QUALIFIER_MATCHES = 10
 
 export type ProjectionInput = {
