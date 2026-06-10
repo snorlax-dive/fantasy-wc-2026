@@ -137,24 +137,37 @@ export function mapPosition(p: string | null | undefined): Pos {
   return 'FWD'
 }
 
+// Shirt-number prior for start probability: lower shirt → stronger starter signal.
+// Floor at 0.40 — even high shirt numbers (#22, #26) represent valid WC squad members
+// who can be guaranteed starters at international level (e.g. Bellingham #22).
+// Before the floor, Bellingham's prior was 0.269, anchoring his final start_prob far
+// too low via the shrinkage formula.
+export function startProbFor(apiPlayerId: number, shirtNumber: number | null | undefined): number {
+  const h = (((apiPlayerId * 2654435761) >>> 0) % 1000) / 1000
+  const ns = shirtNumber != null && shirtNumber >= 1 ? Math.max(0, Math.min(1, (27 - shirtNumber) / 26)) : 0.5
+  return Math.max(0.40, 0.15 + 0.75 * (0.7 * ns + 0.3 * h))
+}
+
 // Classifies a midfielder as ATK (playmaker/winger) or DEF (holding/box-to-box).
 // Used to select the correct goal/assist base rates in priorPointsPerMatch().
 //
 // Priority:
 //  1. Shirt 8–11 → ATK (strong prior: 10 = playmaker, 8/11 = box-to-box/winger)
 //  2. qualStats: if observed G+A rate ≥ 0.20/appearance over ≥ 5 apps → ATK
-//     (catches Bellingham #22, De Bruyne #7, Pedri #26 who don't wear canonical numbers)
-//  3. Default → DEF
+//     (catches assists-rich mids: De Bruyne #7, Pedri #26)
+//  3. qualStats: if goal rate ≥ 0.10/appearance over ≥ 5 apps → ATK
+//     (fallback for when API-Football returns null assists; catches Bellingham #22
+//     who scores goals but may have assists recorded as null)
+//  4. Default → DEF
 export function inferMidRole(
   shirt: number | null | undefined,
   qualStats?: { goals: number; assists: number; appearances: number },
 ): 'ATK' | 'DEF' {
   if (shirt != null && shirt >= 8 && shirt <= 11) return 'ATK'
-  if (
-    qualStats &&
-    qualStats.appearances >= 5 &&
-    (qualStats.goals + qualStats.assists) / qualStats.appearances >= 0.20
-  ) return 'ATK'
+  if (qualStats && qualStats.appearances >= 5) {
+    if ((qualStats.goals + qualStats.assists) / qualStats.appearances >= 0.20) return 'ATK'
+    if (qualStats.goals / qualStats.appearances >= 0.10) return 'ATK'
+  }
   return 'DEF'
 }
 
