@@ -101,9 +101,13 @@ export function BracketBoard({
         Place each country at the furthest round you think they reach. R16 +1 · QF +2 · SF +4 · Final +8 ·
         Champion +15 · Golden Boot +10.
       </p>
-      {lockAt && !locked && (
+      {!locked && (
         <div className="mt-2 inline-block rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800 ring-1 ring-amber-200">
-          ⏰ Editable through the group stage — locks when the knockouts begin, in <Countdown to={lockAt} />
+          {lockAt ? (
+            <>⏰ Editable through the group stage — locks when the knockouts begin, in <Countdown to={lockAt} /></>
+          ) : (
+            <>⏰ Editable through the group stage — locks when the knockouts begin.</>
+          )}
         </div>
       )}
 

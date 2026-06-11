@@ -23,11 +23,18 @@ export async function saveBracket(input: {
   } = await supabase.auth.getUser()
   if (!user) return { error: 'You are not signed in.' }
 
-  const { data: tl } = await supabase.from('settings').select('value').eq('key', 'tournament_locked').maybeSingle()
-  if (tl?.value === true) return { error: 'The game is locked by the commissioner.' }
+  const { data: settingsRows } = await supabase.from('settings').select('key, value')
+  const settings = Object.fromEntries((settingsRows ?? []).map((r) => [r.key, r.value]))
+  if (settings['tournament_locked'] === true) return { error: 'The game is locked by the commissioner.' }
 
-  // The bracket stays editable through the group stage — it only locks once the
-  // first knockout match kicks off (by then you've seen who advanced).
+  // The bracket stays editable through the group stage and locks once the
+  // knockouts begin. Primary signal: the commissioner has advanced the round
+  // past GROUP. Backstop: a knockout fixture has actually kicked off (only
+  // fires once API-Football publishes the knockout fixtures).
+  const currentStage = (settings['current_stage'] as string) ?? 'GROUP'
+  if (currentStage !== 'GROUP') {
+    return { error: 'The bracket is locked — the knockouts have begun.' }
+  }
   const { data: firstKo } = await supabase
     .from('fixtures')
     .select('kickoff')
