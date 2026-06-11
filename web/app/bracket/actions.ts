@@ -26,14 +26,17 @@ export async function saveBracket(input: {
   const { data: tl } = await supabase.from('settings').select('value').eq('key', 'tournament_locked').maybeSingle()
   if (tl?.value === true) return { error: 'The game is locked by the commissioner.' }
 
-  const { data: firstFx } = await supabase
+  // The bracket stays editable through the group stage — it only locks once the
+  // first knockout match kicks off (by then you've seen who advanced).
+  const { data: firstKo } = await supabase
     .from('fixtures')
     .select('kickoff')
+    .neq('stage', 'GROUP')
     .order('kickoff', { ascending: true })
     .limit(1)
     .maybeSingle()
-  if (firstFx && new Date(firstFx.kickoff) <= new Date()) {
-    return { error: 'The bracket is locked — the tournament has started.' }
+  if (firstKo && new Date(firstKo.kickoff) <= new Date()) {
+    return { error: 'The bracket is locked — the knockouts have started.' }
   }
 
   const levels = Object.entries(input.furthest)

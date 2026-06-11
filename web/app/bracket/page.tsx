@@ -20,13 +20,20 @@ export default async function BracketPage() {
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [{ data: teams }, { data: picks }, { data: firstFx }, { data: settingsRows }] = await Promise.all([
+  const [{ data: teams }, { data: picks }, { data: firstKo }, { data: settingsRows }] = await Promise.all([
     supabase.from('teams').select('id, name, flag_url').order('name'),
     supabase
       .from('bracket_picks')
       .select('pick_type, team_id, player_id')
       .eq('user_id', user.id),
-    supabase.from('fixtures').select('kickoff').order('kickoff', { ascending: true }).limit(1).maybeSingle(),
+    // Bracket locks at the first knockout match (after the group stage), not the tournament opener.
+    supabase
+      .from('fixtures')
+      .select('kickoff')
+      .neq('stage', 'GROUP')
+      .order('kickoff', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
     supabase.from('settings').select('key, value'),
   ])
   const settings = Object.fromEntries((settingsRows ?? []).map((r) => [r.key, r.value]))
@@ -58,7 +65,7 @@ export default async function BracketPage() {
   }
 
   const locked =
-    settings['tournament_locked'] === true || (firstFx ? new Date(firstFx.kickoff) <= new Date() : false)
+    settings['tournament_locked'] === true || (firstKo ? new Date(firstKo.kickoff) <= new Date() : false)
 
   return (
     <BracketBoard
@@ -67,7 +74,7 @@ export default async function BracketPage() {
       initialFurthest={furthest}
       initialGoldenBoot={goldenBoot}
       locked={locked}
-      lockAt={firstFx?.kickoff ?? null}
+      lockAt={firstKo?.kickoff ?? null}
     />
   )
 }
