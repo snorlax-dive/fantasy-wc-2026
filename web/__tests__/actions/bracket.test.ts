@@ -17,10 +17,16 @@ function setup(user: { id: string } | null = TEST_USER) {
   return db
 }
 
+// settings is now read as a key/value list (Object.fromEntries(rows.map(...))).
+const openSettings = [
+  { key: 'tournament_locked', value: false },
+  { key: 'current_stage', value: 'GROUP' },
+]
+
 function setupOpenBracket(db: ReturnType<typeof createMockSupabase>) {
   db.from
-    .mockReturnValueOnce(makeChain({ data: { value: false } })) // tournament_locked
-    .mockReturnValueOnce(makeChain({ data: futureFx }))          // first fixture
+    .mockReturnValueOnce(makeChain({ data: openSettings }))  // settings (list)
+    .mockReturnValueOnce(makeChain({ data: futureFx }))      // first knockout fixture
 }
 
 // 16 teams reaching R16, 8 QF, 4 SF, 2 Final, 1 Champion — valid
@@ -40,18 +46,27 @@ describe('saveBracket — auth', () => {
   })
 })
 
-describe('saveBracket — tournament lock', () => {
+describe('saveBracket — lock', () => {
   it('tournament_locked=true → error', async () => {
     const db = setup()
-    db.from.mockReturnValueOnce(makeChain({ data: { value: true } }))
+    db.from.mockReturnValueOnce(makeChain({ data: [{ key: 'tournament_locked', value: true }] }))
     const result = await saveBracket({ furthest: {}, goldenBoot: null })
     expect(result.error).toMatch(/locked/i)
   })
 
-  it('tournament started (first fixture kicked off) → error', async () => {
+  it('current_stage past GROUP (knockouts begun) → error', async () => {
+    const db = setup()
+    db.from.mockReturnValueOnce(
+      makeChain({ data: [{ key: 'tournament_locked', value: false }, { key: 'current_stage', value: 'R32' }] })
+    )
+    const result = await saveBracket({ furthest: {}, goldenBoot: null })
+    expect(result.error).toMatch(/locked|knockout/i)
+  })
+
+  it('knockout fixture already kicked off → error', async () => {
     const db = setup()
     db.from
-      .mockReturnValueOnce(makeChain({ data: { value: false } }))
+      .mockReturnValueOnce(makeChain({ data: openSettings }))
       .mockReturnValueOnce(makeChain({ data: pastFx }))
     const result = await saveBracket({ furthest: {}, goldenBoot: null })
     expect(result.error).toMatch(/locked/i)
