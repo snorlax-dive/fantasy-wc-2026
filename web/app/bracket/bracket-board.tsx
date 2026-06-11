@@ -103,7 +103,7 @@ export function BracketBoard({
       </p>
       {lockAt && !locked && (
         <div className="mt-2 inline-block rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800 ring-1 ring-amber-200">
-          ⏰ Bracket locks in <Countdown to={lockAt} />
+          ⏰ Editable through the group stage — locks when the knockouts begin, in <Countdown to={lockAt} />
         </div>
       )}
 

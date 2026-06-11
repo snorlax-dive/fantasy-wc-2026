@@ -82,8 +82,11 @@ export default function RulesPage() {
         </ul>
       </Section>
 
-      <Section title="4 · Bracket & awards (locked before kickoff)">
-        <p>Place each team at the furthest round you think it reaches:</p>
+      <Section title="4 · Bracket & awards (locks when the knockouts begin)">
+        <p>
+          Place each team at the furthest round you think it reaches. You can edit your bracket all through
+          the group stage — it locks when the first knockout match kicks off.
+        </p>
         <ul className="mt-1 list-disc space-y-1 pl-5">
           <li>Round of 16: <b>+1</b> · Quarter-final: <b>+2</b> · Semi-final: <b>+4</b> · Final: <b>+8</b></li>
           <li><b>Champion</b>: +15 · <b>Golden Boot</b> (top scorer): +10</li>
