@@ -64,8 +64,11 @@ export default async function BracketPage() {
     if (lvl && tid) furthest[tid] = Math.max(furthest[tid] ?? 0, lvl)
   }
 
+  const currentStage = (settings['current_stage'] as string) ?? 'GROUP'
   const locked =
-    settings['tournament_locked'] === true || (firstKo ? new Date(firstKo.kickoff) <= new Date() : false)
+    settings['tournament_locked'] === true ||
+    currentStage !== 'GROUP' ||
+    (firstKo ? new Date(firstKo.kickoff) <= new Date() : false)
 
   return (
     <BracketBoard
